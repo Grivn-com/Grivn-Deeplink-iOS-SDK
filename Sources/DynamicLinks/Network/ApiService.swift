@@ -1,0 +1,216 @@
+//
+//  ApiService.swift
+//  DynamicLinks
+//
+
+import Foundation
+
+/// API 请求响应基类（后端可能只返回 data，无 code/message）
+internal struct BaseApiResponse<T: Decodable>: Decodable {
+    let code: Int?
+    let message: String?
+    let data: T?
+}
+
+/// 创建 Deeplink 请求
+internal struct DeeplinkCreateRequest: Encodable {
+    let projectId: String
+    let name: String
+    let link: String
+    // Android Parameters
+    let apn: String?
+    let afl: String?
+    let amv: String?
+    // iOS Parameters
+    let ibi: String?
+    let ifl: String?
+    let ius: String?
+    let ipfl: String?
+    let ipbi: String?
+    let isi: String?
+    let imv: String?
+    let efr: Bool?
+    // Other Platform
+    let ofl: String?
+    // Social Meta Tags
+    let st: String?
+    let sd: String?
+    let si: String?
+    // Analytics (UTM)
+    let utm_source: String?
+    let utm_medium: String?
+    let utm_campaign: String?
+    let utm_content: String?
+    let utm_term: String?
+    // iTunes Connect
+    let at: String?
+    let ct: String?
+    let mt: String?
+    let pt: String?
+}
+
+/// 解析短链接请求
+internal struct ExchangeShortLinkRequest: Encodable {
+    let requestedLink: String
+}
+
+/// API 服务类
+/// 通过 X-API-Key header 进行认证
+internal final class ApiService: @unchecked Sendable {
+    
+    private let baseUrl: String
+    private let secretKey: String
+    private let timeout: TimeInterval
+    private let trustAllCerts: Bool
+    
+    private lazy var session: URLSession = {
+        let configuration = URLSessionConfiguration.default
+        configuration.timeoutIntervalForRequest = timeout
+        configuration.timeoutIntervalForResource = timeout
+        
+        if trustAllCerts {
+            // 开发环境：信任所有证书
+            return URLSession(configuration: configuration, delegate: TrustAllCertsDelegate(), delegateQueue: nil)
+        }
+        
+        return URLSession(configuration: configuration)
+    }()
+    
+    private let encoder: JSONEncoder = {
+        let encoder = JSONEncoder()
+        encoder.keyEncodingStrategy = .useDefaultKeys
+        return encoder
+    }()
+    
+    private let decoder: JSONDecoder = {
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .useDefaultKeys
+        return decoder
+    }()
+    
+    init(
+        baseUrl: String,
+        secretKey: String,
+        timeout: TimeInterval = 30,
+        trustAllCerts: Bool = false
+    ) {
+        self.baseUrl = baseUrl.hasSuffix("/") ? String(baseUrl.dropLast()) : baseUrl
+        self.secretKey = secretKey
+        self.timeout = timeout
+        self.trustAllCerts = trustAllCerts
+    }
+    
+    /// 创建短链接 (缩短链接)
+    func shortenUrl(
+        projectId: String,
+        components: DynamicLinkComponents
+    ) async throws -> DynamicLinkShortenResponse {
+        let url = URL(string: "\(baseUrl)/api/v1/deeplinks")!
+        
+        let body = DeeplinkCreateRequest(
+            projectId: projectId,
+            name: components.link.absoluteString,
+            link: components.link.absoluteString,
+            // Android Parameters
+            apn: components.androidParameters?.packageName,
+            afl: components.androidParameters?.fallbackURL?.absoluteString,
+            amv: components.androidParameters?.minimumVersion != nil ? String(components.androidParameters!.minimumVersion) : nil,
+            // iOS Parameters
+            ibi: nil,
+            ifl: components.iOSParameters.fallbackURL?.absoluteString,
+            ius: nil,
+            ipfl: components.iOSParameters.iPadFallbackURL?.absoluteString,
+            ipbi: nil,
+            isi: components.iOSParameters.appStoreID,
+            imv: components.iOSParameters.minimumAppVersion,
+            efr: nil,
+            // Other Platform
+            ofl: components.otherPlatformParameters?.fallbackURL?.absoluteString,
+            // Social Meta Tags
+            st: components.socialMetaTagParameters?.title,
+            sd: components.socialMetaTagParameters?.descriptionText,
+            si: components.socialMetaTagParameters?.imageURL?.absoluteString,
+            // Analytics (UTM)
+            utm_source: components.analyticsParameters?.source,
+            utm_medium: components.analyticsParameters?.medium,
+            utm_campaign: components.analyticsParameters?.campaign,
+            utm_content: components.analyticsParameters?.content,
+            utm_term: components.analyticsParameters?.term,
+            // iTunes Connect
+            at: components.iTunesConnectParameters?.affiliateToken,
+            ct: components.iTunesConnectParameters?.campaignToken,
+            mt: nil,
+            pt: components.iTunesConnectParameters?.providerToken
+        )
+        
+        return try await post(url: url, body: body)
+    }
+    
+    /// 解析短链接 (还原长链接)
+    func exchangeShortLink(requestedLink: URL) async throws -> ExchangeLinkResponse {
+        let url = URL(string: "\(baseUrl)/api/v1/deeplinks/exchangeShortLink")!
+        
+        let body = ExchangeShortLinkRequest(requestedLink: requestedLink.absoluteString)
+        
+        return try await post(url: url, body: body)
+    }
+    
+    /// POST 请求
+    private func post<T: Encodable, R: Decodable>(url: URL, body: T) async throws -> R {
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue(secretKey, forHTTPHeaderField: "X-API-Key")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.httpBody = try encoder.encode(body)
+        
+        let (data, response) = try await session.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw DynamicLinksSDKError.networkError(message: "Invalid response", cause: nil)
+        }
+        
+        guard httpResponse.statusCode >= 200 && httpResponse.statusCode < 300 else {
+            throw DynamicLinksSDKError.networkError(message: "Server error: \(httpResponse.statusCode)", cause: nil)
+        }
+        
+        guard !data.isEmpty else {
+            throw DynamicLinksSDKError.networkError(message: "Empty response", cause: nil)
+        }
+        
+        // 优先尝试带 code/data 包装
+        if let wrapped = try? decoder.decode(BaseApiResponse<R>.self, from: data) {
+            let status = wrapped.code ?? 0
+            if status != 0 {
+                throw DynamicLinksSDKError.serverError(message: wrapped.message ?? "Server error", code: status)
+            }
+            if let payload = wrapped.data {
+                return payload
+            }
+        }
+        
+        // 兼容后端直接返回 data 对象（无包装）
+        if let direct = try? decoder.decode(R.self, from: data) {
+            return direct
+        }
+        
+        throw DynamicLinksSDKError.parseError(message: "Missing data in response", cause: nil)
+    }
+}
+
+/// 信任所有证书的代理 (仅开发环境使用)
+private final class TrustAllCertsDelegate: NSObject, URLSessionDelegate {
+    func urlSession(
+        _ session: URLSession,
+        didReceive challenge: URLAuthenticationChallenge,
+        completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
+    ) {
+        if challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust,
+           let serverTrust = challenge.protectionSpace.serverTrust {
+            completionHandler(.useCredential, URLCredential(trust: serverTrust))
+        } else {
+            completionHandler(.performDefaultHandling, nil)
+        }
+    }
+}
+
