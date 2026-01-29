@@ -76,17 +76,67 @@ public final class DynamicLinksSDK: NSObject, @unchecked Sendable {
         return self
     }
     
-    /// 初始化 SDK
+    /// Deferred Deeplink 回调类型
+    public typealias DeferredDeeplinkCallback = @Sendable (DeferredDeeplinkData) -> Void
+    
+    /// Deferred Deeplink 回调
+    nonisolated(unsafe) private static var _deferredCallback: DeferredDeeplinkCallback?
+    
+    /// 初始化 SDK（简单版本，不自动检查 Deferred Deeplink）
     ///
     /// - Parameters:
     ///   - baseUrl: 后端 API Base URL (例如 "https://api.grivn.com")
     ///   - secretKey: Secret Key（通过 X-API-Key header 发送）
-    ///   - projectId: 项目 ID（可选，用于创建链接时指定所属项目。如果只处理链接可以不传）
+    ///   - projectId: 项目 ID（可选，用于创建链接时指定所属项目）
     @discardableResult
     @objc public static func initialize(
         baseUrl: String,
         secretKey: String,
         projectId: String? = nil
+    ) -> DynamicLinksSDK {
+        return initializeInternal(baseUrl: baseUrl, secretKey: secretKey, projectId: projectId, onDeferredDeeplink: nil)
+    }
+    
+    /// 初始化 SDK 并自动检查 Deferred Deeplink
+    ///
+    /// SDK 会在首次启动时自动检查是否有延迟深链，并通过回调返回结果。
+    /// 开发者无需额外调用 checkDeferredDeeplink()。
+    ///
+    /// 使用示例:
+    /// ```swift
+    /// // 在 AppDelegate.didFinishLaunchingWithOptions 中调用
+    /// DynamicLinksSDK.initialize(
+    ///     baseUrl: "https://api.grivn.com",
+    ///     secretKey: "your_secret_key",
+    ///     projectId: "your_project_id"
+    /// ) { result in
+    ///     if result.found {
+    ///         // 处理延迟深链
+    ///         print("Found deferred deeplink: \(result.originalUrl ?? "")")
+    ///     }
+    /// }
+    /// ```
+    ///
+    /// - Parameters:
+    ///   - baseUrl: 后端 API Base URL
+    ///   - secretKey: Secret Key
+    ///   - projectId: 项目 ID（可选）
+    ///   - onDeferredDeeplink: 延迟深链回调（可选，不传则静默上报安装）
+    @discardableResult
+    public static func initialize(
+        baseUrl: String,
+        secretKey: String,
+        projectId: String? = nil,
+        onDeferredDeeplink: DeferredDeeplinkCallback? = nil
+    ) -> DynamicLinksSDK {
+        return initializeInternal(baseUrl: baseUrl, secretKey: secretKey, projectId: projectId, onDeferredDeeplink: onDeferredDeeplink)
+    }
+    
+    private static func initializeInternal(
+        baseUrl: String,
+        secretKey: String,
+        projectId: String?,
+        onDeferredDeeplink: DeferredDeeplinkCallback?
     ) -> DynamicLinksSDK {
         return lock.sync {
             precondition(!baseUrl.isEmpty, "baseUrl cannot be empty")
@@ -106,6 +156,22 @@ public final class DynamicLinksSDK: NSObject, @unchecked Sendable {
             
             _shared = instance
             _isInitialized = true
+            _deferredCallback = onDeferredDeeplink
+            
+            // 自动检查 Deferred Deeplink
+            Task {
+                do {
+                    let result = try await instance.checkDeferredDeeplink(forceCheck: false)
+                    if let callback = _deferredCallback {
+                        await MainActor.run {
+                            callback(result)
+                        }
+                    }
+                } catch {
+                    // 静默失败，不影响 App 启动
+                }
+            }
+            
             return instance
         }
     }
@@ -325,5 +391,133 @@ extension DynamicLinksSDK {
     private func isAllowedCustomDomain(_ url: URL) -> Bool {
         guard let host = url.host else { return false }
         return allowedHosts.contains(host)
+    }
+}
+
+// MARK: - Deferred Deeplink
+
+extension DynamicLinksSDK {
+    
+    /// 检查并获取延迟深链（首次安装后的 Deeplink）
+    ///
+    /// 当用户通过 Deeplink 跳转到 App Store 下载 App 后，首次打开时调用此方法获取原始链接数据。
+    /// 此方法只会在首次启动时返回数据，后续调用将返回 found=false。
+    ///
+    /// 使用示例:
+    /// ```swift
+    /// // 在 AppDelegate 或 SceneDelegate 中调用
+    /// Task {
+    ///     let result = try await DynamicLinksSDK.shared.checkDeferredDeeplink()
+    ///     if result.found {
+    ///         // 处理延迟深链
+    ///         let deeplinkId = result.deeplinkId
+    ///         let utmSource = result.utmSource
+    ///         // 导航到目标页面...
+    ///     }
+    /// }
+    /// ```
+    ///
+    /// - Parameter forceCheck: 是否强制检查（忽略首次启动标记，用于测试）
+    /// - Returns: DeferredDeeplinkData 包含是否找到延迟深链及链接数据
+    /// - Throws: DynamicLinksSDKError.notInitialized 如果 SDK 未初始化
+    public func checkDeferredDeeplink(forceCheck: Bool = false) async throws -> DeferredDeeplinkData {
+        try ensureInitialized()
+        
+        guard let apiService = apiService else {
+            throw DynamicLinksSDKError.notInitialized
+        }
+        
+        // 检查是否是首次启动
+        if !forceCheck && !DeviceFingerprint.isFirstLaunch() {
+            return DeferredDeeplinkData(found: false, linkData: nil)
+        }
+        
+        // 标记已检查
+        DeviceFingerprint.markFirstLaunchChecked()
+        
+        do {
+            let fingerprintId = DeviceFingerprint.getFingerprint()
+            let userAgent = DeviceFingerprint.getUserAgent()
+            let screenResolution = DeviceFingerprint.getScreenResolution()
+            let timezone = DeviceFingerprint.getTimezone()
+            let language = DeviceFingerprint.getLanguage()
+            
+            let response = try await apiService.getDeferredDeeplink(
+                fingerprintId: fingerprintId,
+                userAgent: userAgent,
+                screenResolution: screenResolution,
+                timezone: timezone,
+                language: language
+            )
+            
+            if response.found {
+                // 确认安装
+                try? await confirmInstallInternal()
+            }
+            
+            // 转换 link_data
+            var linkData: [String: Any]? = nil
+            if let data = response.link_data {
+                linkData = data.mapValues { $0.value }
+            }
+            
+            return DeferredDeeplinkData(found: response.found, linkData: linkData)
+        } catch {
+            return DeferredDeeplinkData(found: false, linkData: nil)
+        }
+    }
+    
+    /// 检查并获取延迟深链 (Objective-C 兼容)
+    @objc
+    public func checkDeferredDeeplink(
+        forceCheck: Bool = false,
+        completion: @Sendable @escaping (DeferredDeeplinkData?, NSError?) -> Void
+    ) {
+        Task {
+            do {
+                let result = try await checkDeferredDeeplink(forceCheck: forceCheck)
+                await MainActor.run {
+                    completion(result, nil)
+                }
+            } catch let error as DynamicLinksSDKError {
+                await MainActor.run {
+                    completion(nil, error.nsError)
+                }
+            } catch {
+                await MainActor.run {
+                    completion(nil, error as NSError)
+                }
+            }
+        }
+    }
+    
+    /// 手动确认安装（通常由 checkDeferredDeeplink 自动调用）
+    public func confirmInstall() async throws {
+        try ensureInitialized()
+        try await confirmInstallInternal()
+    }
+    
+    private func confirmInstallInternal() async throws {
+        guard let apiService = apiService else { return }
+        
+        let fingerprintId = DeviceFingerprint.getFingerprint()
+        let userAgent = DeviceFingerprint.getUserAgent()
+        let deviceModel = UIDevice.current.model
+        let osVersion = UIDevice.current.systemVersion
+        let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String
+        
+        _ = try await apiService.confirmInstall(
+            fingerprintId: fingerprintId,
+            userAgent: userAgent,
+            deviceModel: deviceModel,
+            osVersion: osVersion,
+            appVersion: appVersion
+        )
+    }
+    
+    /// 重置首次启动状态（用于测试）
+    @objc
+    public func resetDeferredDeeplinkState() {
+        DeviceFingerprint.resetFirstLaunch()
     }
 }

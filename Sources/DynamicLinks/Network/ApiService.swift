@@ -54,6 +54,92 @@ internal struct ExchangeShortLinkRequest: Encodable {
     let requestedLink: String
 }
 
+/// 获取延迟深链请求
+internal struct DeferredDeeplinkRequest: Encodable {
+    let fingerprint_id: String
+    let ip_address: String?
+    let user_agent: String
+    let screen_resolution: String?
+    let timezone: String?
+    let language: String?
+}
+
+/// 延迟深链响应
+internal struct DeferredDeeplinkResponse: Decodable {
+    let found: Bool
+    let link_data: [String: AnyCodable]?
+}
+
+/// 确认安装请求
+internal struct ConfirmInstallRequest: Encodable {
+    let fingerprint_id: String
+    let ip_address: String?
+    let user_agent: String
+    let device_model: String?
+    let os_version: String?
+    let app_version: String?
+}
+
+/// 确认安装响应
+internal struct ConfirmInstallResponse: Decodable {
+    let success: Bool
+    let message: String?
+}
+
+/// 用于解码任意 JSON 值
+internal struct AnyCodable: Codable {
+    let value: Any
+    
+    init(_ value: Any) {
+        self.value = value
+    }
+    
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        
+        if container.decodeNil() {
+            value = NSNull()
+        } else if let bool = try? container.decode(Bool.self) {
+            value = bool
+        } else if let int = try? container.decode(Int.self) {
+            value = int
+        } else if let double = try? container.decode(Double.self) {
+            value = double
+        } else if let string = try? container.decode(String.self) {
+            value = string
+        } else if let array = try? container.decode([AnyCodable].self) {
+            value = array.map { $0.value }
+        } else if let dict = try? container.decode([String: AnyCodable].self) {
+            value = dict.mapValues { $0.value }
+        } else {
+            throw DecodingError.dataCorruptedError(in: container, debugDescription: "Unable to decode value")
+        }
+    }
+    
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        
+        switch value {
+        case is NSNull:
+            try container.encodeNil()
+        case let bool as Bool:
+            try container.encode(bool)
+        case let int as Int:
+            try container.encode(int)
+        case let double as Double:
+            try container.encode(double)
+        case let string as String:
+            try container.encode(string)
+        case let array as [Any]:
+            try container.encode(array.map { AnyCodable($0) })
+        case let dict as [String: Any]:
+            try container.encode(dict.mapValues { AnyCodable($0) })
+        default:
+            throw EncodingError.invalidValue(value, EncodingError.Context(codingPath: [], debugDescription: "Unable to encode value"))
+        }
+    }
+}
+
 /// API 服务类
 /// 通过 X-API-Key header 进行认证
 internal final class ApiService: @unchecked Sendable {
@@ -151,6 +237,50 @@ internal final class ApiService: @unchecked Sendable {
         let url = URL(string: "\(baseUrl)/api/v1/deeplinks/exchangeShortLink")!
         
         let body = ExchangeShortLinkRequest(requestedLink: requestedLink.absoluteString)
+        
+        return try await post(url: url, body: body)
+    }
+    
+    /// 获取延迟深链
+    func getDeferredDeeplink(
+        fingerprintId: String,
+        userAgent: String,
+        screenResolution: String?,
+        timezone: String?,
+        language: String?
+    ) async throws -> DeferredDeeplinkResponse {
+        let url = URL(string: "\(baseUrl)/api/v1/analytics/deferred")!
+        
+        let body = DeferredDeeplinkRequest(
+            fingerprint_id: fingerprintId,
+            ip_address: nil,
+            user_agent: userAgent,
+            screen_resolution: screenResolution,
+            timezone: timezone,
+            language: language
+        )
+        
+        return try await post(url: url, body: body)
+    }
+    
+    /// 确认安装
+    func confirmInstall(
+        fingerprintId: String,
+        userAgent: String,
+        deviceModel: String?,
+        osVersion: String?,
+        appVersion: String?
+    ) async throws -> ConfirmInstallResponse {
+        let url = URL(string: "\(baseUrl)/api/v1/analytics/confirm-install")!
+        
+        let body = ConfirmInstallRequest(
+            fingerprint_id: fingerprintId,
+            ip_address: nil,
+            user_agent: userAgent,
+            device_model: deviceModel,
+            os_version: osVersion,
+            app_version: appVersion
+        )
         
         return try await post(url: url, body: body)
     }
