@@ -55,9 +55,8 @@ internal struct ExchangeShortLinkRequest: Encodable {
 }
 
 /// 获取延迟深链请求
+/// 注意：不发送 fingerprint_id，服务端会根据 IP + UserAgent 自动生成
 internal struct DeferredDeeplinkRequest: Encodable {
-    let fingerprint_id: String
-    let ip_address: String?
     let user_agent: String
     let screen_resolution: String?
     let timezone: String?
@@ -71,9 +70,8 @@ internal struct DeferredDeeplinkResponse: Decodable {
 }
 
 /// 确认安装请求
+/// 注意：不发送 fingerprint_id，服务端会根据 IP + UserAgent 自动生成
 internal struct ConfirmInstallRequest: Encodable {
-    let fingerprint_id: String
-    let ip_address: String?
     let user_agent: String
     let device_model: String?
     let os_version: String?
@@ -242,8 +240,8 @@ internal final class ApiService: @unchecked Sendable {
     }
     
     /// 获取延迟深链
+    /// 服务端会根据请求的 IP + UserAgent 生成指纹进行匹配
     func getDeferredDeeplink(
-        fingerprintId: String,
         userAgent: String,
         screenResolution: String?,
         timezone: String?,
@@ -252,8 +250,6 @@ internal final class ApiService: @unchecked Sendable {
         let url = URL(string: "\(baseUrl)/api/v1/analytics/deferred")!
         
         let body = DeferredDeeplinkRequest(
-            fingerprint_id: fingerprintId,
-            ip_address: nil,
             user_agent: userAgent,
             screen_resolution: screenResolution,
             timezone: timezone,
@@ -264,8 +260,8 @@ internal final class ApiService: @unchecked Sendable {
     }
     
     /// 确认安装
+    /// 服务端会根据请求的 IP + UserAgent 生成指纹进行匹配
     func confirmInstall(
-        fingerprintId: String,
         userAgent: String,
         deviceModel: String?,
         osVersion: String?,
@@ -274,8 +270,6 @@ internal final class ApiService: @unchecked Sendable {
         let url = URL(string: "\(baseUrl)/api/v1/analytics/confirm-install")!
         
         let body = ConfirmInstallRequest(
-            fingerprint_id: fingerprintId,
-            ip_address: nil,
             user_agent: userAgent,
             device_model: deviceModel,
             os_version: osVersion,

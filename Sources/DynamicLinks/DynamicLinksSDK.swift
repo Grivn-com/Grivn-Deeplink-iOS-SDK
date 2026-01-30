@@ -403,6 +403,9 @@ extension DynamicLinksSDK {
     /// 当用户通过 Deeplink 跳转到 App Store 下载 App 后，首次打开时调用此方法获取原始链接数据。
     /// 此方法只会在首次启动时返回数据，后续调用将返回 found=false。
     ///
+    /// 注意：服务端会根据请求的 IP 地址和 User-Agent 生成指纹进行匹配，
+    /// 因此用户必须在相同的网络环境下（相同 IP）才能匹配成功。
+    ///
     /// 使用示例:
     /// ```swift
     /// // 在 AppDelegate 或 SceneDelegate 中调用
@@ -436,14 +439,13 @@ extension DynamicLinksSDK {
         DeviceFingerprint.markFirstLaunchChecked()
         
         do {
-            let fingerprintId = DeviceFingerprint.getFingerprint()
+            // 服务端会根据请求的 IP + UserAgent 生成指纹进行匹配
             let userAgent = DeviceFingerprint.getUserAgent()
             let screenResolution = DeviceFingerprint.getScreenResolution()
             let timezone = DeviceFingerprint.getTimezone()
             let language = DeviceFingerprint.getLanguage()
             
             let response = try await apiService.getDeferredDeeplink(
-                fingerprintId: fingerprintId,
                 userAgent: userAgent,
                 screenResolution: screenResolution,
                 timezone: timezone,
@@ -500,14 +502,13 @@ extension DynamicLinksSDK {
     private func confirmInstallInternal() async throws {
         guard let apiService = apiService else { return }
         
-        let fingerprintId = DeviceFingerprint.getFingerprint()
+        // 服务端会根据请求的 IP + UserAgent 生成指纹（UIDevice 在 Swift 6 中为 MainActor 隔离，需 await）
         let userAgent = DeviceFingerprint.getUserAgent()
-        let deviceModel = UIDevice.current.model
-        let osVersion = UIDevice.current.systemVersion
-        let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String
+        let deviceModel = await MainActor.run { UIDevice.current.model }
+        let osVersion = await MainActor.run { UIDevice.current.systemVersion }
+        let appVersion = await MainActor.run { Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String }
         
         _ = try await apiService.confirmInstall(
-            fingerprintId: fingerprintId,
             userAgent: userAgent,
             deviceModel: deviceModel,
             osVersion: osVersion,
