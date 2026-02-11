@@ -13,7 +13,6 @@ public final class DynamicLinkComponents: NSObject, @unchecked Sendable {
     public var androidParameters: DynamicLinkAndroidParameters?
     public var iTunesConnectParameters: DynamicLinkItunesConnectAnalyticsParameters?
     public var socialMetaTagParameters: DynamicLinkSocialMetaTagParameters?
-    public var options: DynamicLinkOptionsParameters = DynamicLinkOptionsParameters()
     public var otherPlatformParameters: DynamicLinkOtherPlatformParameters?
     public var analyticsParameters: DynamicLinkAnalyticsParameters?
 
@@ -24,7 +23,6 @@ public final class DynamicLinkComponents: NSObject, @unchecked Sendable {
         androidParameters: DynamicLinkAndroidParameters? = nil,
         iTunesConnectParameters: DynamicLinkItunesConnectAnalyticsParameters? = nil,
         socialMetaTagParameters: DynamicLinkSocialMetaTagParameters? = nil,
-        options: DynamicLinkOptionsParameters = DynamicLinkOptionsParameters(),
         otherPlatformParameters: DynamicLinkOtherPlatformParameters? = nil,
         analyticsParameters: DynamicLinkAnalyticsParameters? = nil
     ) {
@@ -44,7 +42,6 @@ public final class DynamicLinkComponents: NSObject, @unchecked Sendable {
         self.androidParameters = androidParameters
         self.iTunesConnectParameters = iTunesConnectParameters
         self.socialMetaTagParameters = socialMetaTagParameters
-        self.options = options
         self.otherPlatformParameters = otherPlatformParameters
         self.analyticsParameters = analyticsParameters
     }
@@ -73,21 +70,10 @@ public final class DynamicLinkComponents: NSObject, @unchecked Sendable {
                 return
             }
             for (key, value) in json {
-                if key == "pathLength" {
-                    if let numberValue = value as? NSNumber {
-                        let stringValue: String
-                        switch numberValue.intValue {
-                        case 1: stringValue = "SHORT"
-                        default: stringValue = "UNGUESSABLE"
-                        }
-                        dict[key] = stringValue
-                    }
-                } else {
-                    if let stringValue = value as? String {
-                        dict[key] = stringValue
-                    } else if let numberValue = value as? NSNumber {
-                        dict[key] = numberValue.stringValue
-                    }
+                if let stringValue = value as? String {
+                    dict[key] = stringValue
+                } else if let numberValue = value as? NSNumber {
+                    dict[key] = numberValue.stringValue
                 }
             }
         }
@@ -98,7 +84,6 @@ public final class DynamicLinkComponents: NSObject, @unchecked Sendable {
         addParams(androidParameters)
         addParams(iTunesConnectParameters)
         addParams(otherPlatformParameters)
-        addParams(options)
 
         return dict
     }
