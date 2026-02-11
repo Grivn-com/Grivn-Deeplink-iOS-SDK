@@ -82,22 +82,33 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
 ### 3. Handle Pasteboard Dynamic Links
 
-Check if the user has copied a dynamic link (useful for deferred deep linking):
+On iOS 16+, reading pasteboard content triggers a system permission banner.
+Use `hasPossibleDynamicLink()` (no prompt) to check first, then read only on user action.
 
+#### Step 1: Check (no prompt)
 ```swift
-Task {
-    do {
-        let dynamicLink = try await DynamicLinksSDK.shared.handlePasteboardDynamicLink()
-        handleDeepLink(dynamicLink.url)
-    } catch DynamicLinksSDKError.noURLInPasteboard {
-        // No dynamic link in pasteboard
-    } catch DynamicLinksSDKError.alreadyCheckedPasteboard {
-        // Already checked once this session
-    } catch {
-        print("Error: \(error)")
-    }
+if DynamicLinksSDK.shared.hasPossibleDynamicLink() {
+    // Show a banner or button inviting the user to paste
 }
 ```
+
+#### Step 2: Read on user action
+```swift
+// Called when user taps "Open copied link" button
+do {
+    let dynamicLink = try await DynamicLinksSDK.shared.handlePasteboardDynamicLink()
+    handleDeepLink(dynamicLink.url)
+} catch DynamicLinksSDKError.noURLInPasteboard {
+    // No dynamic link in pasteboard
+} catch DynamicLinksSDKError.alreadyCheckedPasteboard {
+    // Already checked once this session
+} catch {
+    print("Error: \(error)")
+}
+```
+
+> **Important**: Do NOT call `handlePasteboardDynamicLink()` automatically
+> (e.g. in `sceneDidBecomeActive`). This triggers the system paste prompt every time.
 
 ### 4. Create (Shorten) Dynamic Links
 
@@ -157,7 +168,8 @@ Task {
 | `configure(allowedHosts:)` | Set allowed hosts for link validation |
 | `setTrustAllCerts(_:)` | Trust all SSL certificates (dev only) |
 | `handleDynamicLink(_:)` | Parse a dynamic link and return `DynamicLink` |
-| `handlePasteboardDynamicLink()` | Check pasteboard for dynamic link |
+| `hasPossibleDynamicLink()` | Check if pasteboard may contain a dynamic link (no iOS 16+ prompt) |
+| `handlePasteboardDynamicLink()` | Read and resolve pasteboard dynamic link (triggers iOS 16+ prompt) |
 | `shorten(dynamicLink:projectId:)` | Create a short link from `DynamicLinkComponents` |
 | `isValidDynamicLink(url:)` | Check if a URL is a valid dynamic link |
 

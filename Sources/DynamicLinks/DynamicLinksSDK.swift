@@ -260,7 +260,15 @@ extension DynamicLinksSDK {
 // MARK: - 粘贴板链接检测
 
 extension DynamicLinksSDK {
-    
+
+    /// Check if pasteboard may contain a dynamic link (does NOT trigger iOS 16+ paste prompt)
+    ///
+    /// Use this to decide whether to show a "Paste link" button/banner.
+    /// Only when user taps the button should you call `handlePasteboardDynamicLink()`.
+    @objc public func hasPossibleDynamicLink() -> Bool {
+        return UIPasteboard.general.hasURLs
+    }
+
     /// 检查并处理粘贴板中的动态链接
     /// 每次 App 启动只会检查一次粘贴板
     ///
