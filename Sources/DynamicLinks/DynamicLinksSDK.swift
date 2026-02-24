@@ -35,7 +35,7 @@ import UIKit
 public final class DynamicLinksSDK: NSObject, @unchecked Sendable {
     
     /// SDK 版本号
-    @objc public static let sdkVersion: String = "1.0.0"
+    @objc public static let sdkVersion: String = "1.0.3"
     
     // MARK: - 单例 & 线程安全
     
@@ -43,6 +43,7 @@ public final class DynamicLinksSDK: NSObject, @unchecked Sendable {
     nonisolated(unsafe) private static var _shared: DynamicLinksSDK?
     nonisolated(unsafe) private static var _isInitialized: Bool = false
     nonisolated(unsafe) private static var _trustAllCerts: Bool = false
+    nonisolated(unsafe) private static var _analyticsEnabled: Bool = true
     
     @objc public static var shared: DynamicLinksSDK {
         return lock.sync {
@@ -76,6 +77,22 @@ public final class DynamicLinksSDK: NSObject, @unchecked Sendable {
         return self
     }
     
+    /// Whether analytics data collection is enabled (deferred deeplink & install confirmation).
+    /// When disabled, regular deep link handling (Universal Links) continues to work normally.
+    @objc public static var analyticsEnabled: Bool {
+        get { lock.sync { _analyticsEnabled } }
+        set { lock.sync { _analyticsEnabled = newValue } }
+    }
+
+    /// Enable or disable analytics data collection.
+    /// When disabled, `checkDeferredDeeplink` returns not-found and `confirmInstall` is a no-op.
+    /// Regular deep link handling (Universal Links) is not affected.
+    @discardableResult
+    @objc public static func setAnalyticsEnabled(_ enabled: Bool) -> DynamicLinksSDK.Type {
+        lock.sync { _analyticsEnabled = enabled }
+        return self
+    }
+
     /// Deferred Deeplink 回调类型
     public typealias DeferredDeeplinkCallback = @Sendable (DeferredDeeplinkData) -> Void
     
@@ -433,11 +450,16 @@ extension DynamicLinksSDK {
     /// - Throws: DynamicLinksSDKError.notInitialized 如果 SDK 未初始化
     public func checkDeferredDeeplink(forceCheck: Bool = false) async throws -> DeferredDeeplinkData {
         try ensureInitialized()
-        
+
+        // Analytics opt-out: skip deferred deeplink check
+        if !DynamicLinksSDK.analyticsEnabled {
+            return DeferredDeeplinkData(found: false, linkData: nil)
+        }
+
         guard let apiService = apiService else {
             throw DynamicLinksSDKError.notInitialized
         }
-        
+
         // 检查是否是首次启动
         if !forceCheck && !DeviceFingerprint.isFirstLaunch() {
             return DeferredDeeplinkData(found: false, linkData: nil)
@@ -508,6 +530,9 @@ extension DynamicLinksSDK {
     }
     
     private func confirmInstallInternal() async throws {
+        // Analytics opt-out: skip install confirmation
+        if !DynamicLinksSDK.analyticsEnabled { return }
+
         guard let apiService = apiService else { return }
         
         // 服务端会根据请求的 IP + UserAgent 生成指纹（UIDevice 在 Swift 6 中为 MainActor 隔离，需 await）
