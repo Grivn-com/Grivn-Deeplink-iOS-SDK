@@ -84,11 +84,12 @@ public final class DynamicLinksSDK: NSObject, @unchecked Sendable {
         set { lock.sync { _analyticsEnabled = newValue } }
     }
 
-    /// Enable or disable analytics data collection.
+    /// Enable or disable analytics data collection (Swift-only fluent API).
     /// When disabled, `checkDeferredDeeplink` returns not-found and `confirmInstall` is a no-op.
     /// Regular deep link handling (Universal Links) is not affected.
+    /// Objective-C: use the `analyticsEnabled` property setter instead.
     @discardableResult
-    @objc public static func setAnalyticsEnabled(_ enabled: Bool) -> DynamicLinksSDK.Type {
+    public static func setAnalyticsEnabled(_ enabled: Bool) -> DynamicLinksSDK.Type {
         lock.sync { _analyticsEnabled = enabled }
         return self
     }
