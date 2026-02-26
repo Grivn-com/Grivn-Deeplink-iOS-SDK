@@ -287,37 +287,53 @@ internal final class ApiService: @unchecked Sendable {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.httpBody = try encoder.encode(body)
-        
-        let (data, response) = try await session.data(for: request)
-        
+
+        SDKLogger.debug("→ POST \(url) [key=\(SDKLogger.maskApiKey(secretKey))]")
+
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await session.data(for: request)
+        } catch {
+            SDKLogger.error("Network I/O error: \(error.localizedDescription)", error)
+            throw DynamicLinksSDKError.networkError(message: "Network error: \(error.localizedDescription)", cause: error)
+        }
+
         guard let httpResponse = response as? HTTPURLResponse else {
+            SDKLogger.error("Invalid response (not HTTP)")
             throw DynamicLinksSDKError.networkError(message: "Invalid response", cause: nil)
         }
-        
+
+        SDKLogger.debug("← \(httpResponse.statusCode) (\(data.count) bytes)")
+
         guard httpResponse.statusCode >= 200 && httpResponse.statusCode < 300 else {
+            SDKLogger.error("HTTP error \(httpResponse.statusCode)")
             throw DynamicLinksSDKError.networkError(message: "Server error: \(httpResponse.statusCode)", cause: nil)
         }
-        
+
         guard !data.isEmpty else {
+            SDKLogger.error("Empty response body")
             throw DynamicLinksSDKError.networkError(message: "Empty response", cause: nil)
         }
-        
+
         // 优先尝试带 code/data 包装
         if let wrapped = try? decoder.decode(BaseApiResponse<R>.self, from: data) {
             let status = wrapped.code ?? 0
             if status != 0 {
+                SDKLogger.error("Server error code=\(status): \(wrapped.message ?? "")")
                 throw DynamicLinksSDKError.serverError(message: wrapped.message ?? "Server error", code: status)
             }
             if let payload = wrapped.data {
                 return payload
             }
         }
-        
+
         // 兼容后端直接返回 data 对象（无包装）
         if let direct = try? decoder.decode(R.self, from: data) {
             return direct
         }
-        
+
+        SDKLogger.error("Response parse error — failed to decode response body")
         throw DynamicLinksSDKError.parseError(message: "Missing data in response", cause: nil)
     }
 }

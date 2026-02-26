@@ -67,6 +67,41 @@ public final class DynamicLinksSDK: NSObject, @unchecked Sendable {
     
     // MARK: - 初始化
     
+    /// 启用或关闭调试模式
+    ///
+    /// 开启后，SDK 会以 `[GrivnSDK]` 标签输出 DEBUG 级别的日志（初始化、网络请求、
+    /// Deferred Deeplink 检查等）。关闭后完全静默（NONE）。
+    ///
+    /// - Parameter enabled: true 为开启（DEBUG 级别），false 为关闭（NONE）
+    @discardableResult
+    @objc public static func setDebugMode(_ enabled: Bool) -> DynamicLinksSDK.Type {
+        SDKLogger.shared.logLevel = enabled ? .debug : .none
+        return self
+    }
+
+    /// 设置日志级别
+    ///
+    /// 可选级别：debug、info、warn、error、none（默认 none，完全静默）。
+    ///
+    /// - Parameter level: 日志级别
+    @discardableResult
+    public static func setLogLevel(_ level: LogLevel) -> DynamicLinksSDK.Type {
+        SDKLogger.shared.logLevel = level
+        return self
+    }
+
+    /// 注册自定义日志处理器
+    ///
+    /// 开发者可实现 `DynamicLinksLogHandler` 协议，将 SDK 日志接入
+    /// CocoaLumberjack、Firebase Crashlytics 等外部日志系统。
+    ///
+    /// - Parameter handler: 自定义日志处理器
+    @discardableResult
+    public static func setLogger(_ handler: DynamicLinksLogHandler) -> DynamicLinksSDK.Type {
+        SDKLogger.shared.handler = handler
+        return self
+    }
+
     /// 设置是否信任所有证书（仅开发环境使用）
     /// 必须在 initialize() 之前调用
     @discardableResult
@@ -175,7 +210,9 @@ public final class DynamicLinksSDK: NSObject, @unchecked Sendable {
             _shared = instance
             _isInitialized = true
             _deferredCallback = onDeferredDeeplink
-            
+
+            SDKLogger.info("SDK initialized — baseUrl=\(instance.baseUrl), projectId=\(projectId ?? "(none)"), analyticsEnabled=\(_analyticsEnabled)")
+
             // 自动检查 Deferred Deeplink
             Task {
                 do {
@@ -186,7 +223,7 @@ public final class DynamicLinksSDK: NSObject, @unchecked Sendable {
                         }
                     }
                 } catch {
-                    // 静默失败，不影响 App 启动
+                    SDKLogger.warn("Auto deferred-deeplink check failed", error)
                 }
             }
             
@@ -234,22 +271,27 @@ extension DynamicLinksSDK {
     /// - Throws: DynamicLinksSDKError
     public func handleDynamicLink(_ incomingURL: URL) async throws -> DynamicLink {
         try ensureInitialized()
-        
+
+        SDKLogger.debug("handleDynamicLink — url=\(incomingURL)")
+
         guard isValidDynamicLink(url: incomingURL) else {
+            SDKLogger.warn("Invalid dynamic link: \(incomingURL)")
             throw DynamicLinksSDKError.invalidDynamicLink
         }
-        
+
         guard let apiService = apiService else {
             throw DynamicLinksSDKError.notInitialized
         }
-        
+
         let response = try await apiService.exchangeShortLink(requestedLink: incomingURL)
-        
+
         guard let longLink = response.longLink,
               let dynamicLink = DynamicLink(longLink: longLink) else {
+            SDKLogger.error("Failed to parse long link from exchange response")
             throw DynamicLinksSDKError.parseError(message: "Failed to parse long link", cause: nil)
         }
-        
+
+        SDKLogger.info("exchangeShortLink succeeded — longLink=\(longLink)")
         return dynamicLink
     }
     
@@ -466,36 +508,44 @@ extension DynamicLinksSDK {
             return DeferredDeeplinkData(found: false, linkData: nil)
         }
         
+        SDKLogger.info("Checking deferred deeplink (forceCheck=\(forceCheck))")
+
         // 标记已检查
         DeviceFingerprint.markFirstLaunchChecked()
-        
+
         do {
             // 服务端会根据请求的 IP + UserAgent 生成指纹进行匹配
             let userAgent = DeviceFingerprint.getUserAgent()
             let screenResolution = DeviceFingerprint.getScreenResolution()
             let timezone = DeviceFingerprint.getTimezone()
             let language = DeviceFingerprint.getLanguage()
-            
+
+            SDKLogger.debug("Fingerprint matching — screen=\(screenResolution), tz=\(timezone), lang=\(language)")
+
             let response = try await apiService.getDeferredDeeplink(
                 userAgent: userAgent,
                 screenResolution: screenResolution,
                 timezone: timezone,
                 language: language
             )
-            
+
             if response.found {
+                SDKLogger.info("Deferred deeplink found via fingerprint")
                 // 确认安装
                 try? await confirmInstallInternal()
+            } else {
+                SDKLogger.info("No deferred deeplink found")
             }
-            
+
             // 转换 link_data
             var linkData: [String: Any]? = nil
             if let data = response.link_data {
                 linkData = data.mapValues { $0.value }
             }
-            
+
             return DeferredDeeplinkData(found: response.found, linkData: linkData)
         } catch {
+            SDKLogger.error("checkDeferredDeeplink exception", error)
             return DeferredDeeplinkData(found: false, linkData: nil)
         }
     }
@@ -535,19 +585,22 @@ extension DynamicLinksSDK {
         if !DynamicLinksSDK.analyticsEnabled { return }
 
         guard let apiService = apiService else { return }
-        
+
         // 服务端会根据请求的 IP + UserAgent 生成指纹（UIDevice 在 Swift 6 中为 MainActor 隔离，需 await）
         let userAgent = DeviceFingerprint.getUserAgent()
         let deviceModel = await MainActor.run { UIDevice.current.model }
         let osVersion = await MainActor.run { UIDevice.current.systemVersion }
         let appVersion = await MainActor.run { Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String }
-        
+
+        SDKLogger.debug("confirmInstall — device=\(deviceModel), os=\(osVersion), appVersion=\(appVersion ?? "N/A")")
+
         _ = try await apiService.confirmInstall(
             userAgent: userAgent,
             deviceModel: deviceModel,
             osVersion: osVersion,
             appVersion: appVersion
         )
+        SDKLogger.info("Install confirmed")
     }
     
     /// 重置首次启动状态（用于测试）

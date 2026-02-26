@@ -29,11 +29,11 @@ public final class DynamicLinkComponents: NSObject, @unchecked Sendable {
         self.link = link
 
         guard let domainURIPrefixURL = URL(string: domainURIPrefix) else {
-            print("Invalid domainURIPrefix. Please input a valid URL.")
+            SDKLogger.warn("Invalid domainURIPrefix. Please input a valid URL.")
             return nil
         }
         guard domainURIPrefixURL.scheme?.lowercased() == "https" else {
-            print("Invalid domainURIPrefix scheme. Scheme needs to be https.")
+            SDKLogger.warn("Invalid domainURIPrefix scheme. Scheme needs to be https.")
             return nil
         }
 

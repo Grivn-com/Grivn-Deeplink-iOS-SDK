@@ -26,7 +26,7 @@ public final class DynamicLink: NSObject, @unchecked Sendable {
         guard let components = URLComponents(url: longLink, resolvingAgainstBaseURL: false),
               let queryItems = components.queryItems
         else {
-            print("❌ Invalid long link URL")
+            SDKLogger.warn("Invalid long link URL")
             return nil
         }
         
