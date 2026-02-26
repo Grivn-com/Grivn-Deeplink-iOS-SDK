@@ -35,8 +35,8 @@
 public final class DynamicLinksSDK: NSObject, @unchecked Sendable {
 
     /// SDK 版本号
-    @objc public static let sdkVersion: String = "1.0.3"
-
+    @objc public static let sdkVersion: String = "1.0.9"
+    
     // MARK: - 单例 & 线程安全
 
     // Thread safety: all access to static mutable state goes through `lock`
