@@ -73,13 +73,25 @@ internal final class DefaultLogHandler: DynamicLinksLogHandler {
 ///
 /// 生产模式（默认）完全静默。调用 `DynamicLinksSDK.setDebugMode(true)` 后
 /// 以 `[GrivnSDK]` 标签输出调试信息。
-internal final class SDKLogger: @unchecked Sendable {
+internal final class SDKLogger: Sendable {
     static let shared = SDKLogger()
 
     private static let TAG = "GrivnSDK"
 
-    nonisolated(unsafe) var logLevel: LogLevel = .none
-    nonisolated(unsafe) var handler: DynamicLinksLogHandler = DefaultLogHandler()
+    // Thread safety: all access goes through `lock` via computed properties
+    private let lock = UnfairLock()
+    nonisolated(unsafe) private var _logLevel: LogLevel = .none
+    nonisolated(unsafe) private var _handler: DynamicLinksLogHandler = DefaultLogHandler()
+
+    var logLevel: LogLevel {
+        get { lock.withLock { _logLevel } }
+        set { lock.withLock { _logLevel = newValue } }
+    }
+
+    var handler: DynamicLinksLogHandler {
+        get { lock.withLock { _handler } }
+        set { lock.withLock { _handler = newValue } }
+    }
 
     private init() {}
 

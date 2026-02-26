@@ -70,7 +70,8 @@ internal struct DeferredDeeplinkResponse: Decodable {
 }
 
 /// 事件批量上报请求
-internal struct EventBatchRequest: Encodable {
+/// @unchecked Sendable: params contain only JSON-primitive values
+internal struct EventBatchRequest: Encodable, @unchecked Sendable {
     let projectId: String
     let deviceId: String
     let deviceType: String
@@ -91,7 +92,8 @@ internal struct EventBatchRequest: Encodable {
 }
 
 /// 单个事件
-internal struct EventItemRequest: Encodable {
+/// @unchecked Sendable: params contain only JSON-primitive values
+internal struct EventItemRequest: Encodable, @unchecked Sendable {
     let eventName: String
     let params: [String: Any]?
     let timestamp: TimeInterval?
@@ -194,38 +196,24 @@ internal struct AnyCodable: Codable {
 
 /// API 服务类
 /// 通过 X-API-Key header 进行认证
-internal final class ApiService: @unchecked Sendable {
-    
+internal final class ApiService: Sendable {
+
     private let baseUrl: String
     private let secretKey: String
-    private let timeout: TimeInterval
-    private let trustAllCerts: Bool
-    
-    private lazy var session: URLSession = {
-        let configuration = URLSessionConfiguration.default
-        configuration.timeoutIntervalForRequest = timeout
-        configuration.timeoutIntervalForResource = timeout
-        
-        if trustAllCerts {
-            // 开发环境：信任所有证书
-            return URLSession(configuration: configuration, delegate: TrustAllCertsDelegate(), delegateQueue: nil)
-        }
-        
-        return URLSession(configuration: configuration)
-    }()
-    
+    private let session: URLSession
+
     private let encoder: JSONEncoder = {
         let encoder = JSONEncoder()
         encoder.keyEncodingStrategy = .useDefaultKeys
         return encoder
     }()
-    
+
     private let decoder: JSONDecoder = {
         let decoder = JSONDecoder()
         decoder.keyDecodingStrategy = .useDefaultKeys
         return decoder
     }()
-    
+
     init(
         baseUrl: String,
         secretKey: String,
@@ -234,8 +222,16 @@ internal final class ApiService: @unchecked Sendable {
     ) {
         self.baseUrl = baseUrl.hasSuffix("/") ? String(baseUrl.dropLast()) : baseUrl
         self.secretKey = secretKey
-        self.timeout = timeout
-        self.trustAllCerts = trustAllCerts
+
+        let configuration = URLSessionConfiguration.default
+        configuration.timeoutIntervalForRequest = timeout
+        configuration.timeoutIntervalForResource = timeout
+
+        if trustAllCerts {
+            self.session = URLSession(configuration: configuration, delegate: TrustAllCertsDelegate(), delegateQueue: nil)
+        } else {
+            self.session = URLSession(configuration: configuration)
+        }
     }
     
     /// 创建短链接 (缩短链接)
@@ -399,7 +395,8 @@ internal final class ApiService: @unchecked Sendable {
 }
 
 /// 信任所有证书的代理 (仅开发环境使用)
-private final class TrustAllCertsDelegate: NSObject, URLSessionDelegate {
+/// @unchecked Sendable: stateless delegate, safe to share across threads
+private final class TrustAllCertsDelegate: NSObject, URLSessionDelegate, @unchecked Sendable {
     func urlSession(
         _ session: URLSession,
         didReceive challenge: URLAuthenticationChallenge,

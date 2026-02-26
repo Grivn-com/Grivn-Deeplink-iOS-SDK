@@ -8,7 +8,7 @@
 
 import Foundation
 
-internal final class EventTracker: @unchecked Sendable {
+internal actor EventTracker {
 
     private let apiService: ApiService
     private let projectId: String
@@ -19,7 +19,6 @@ internal final class EventTracker: @unchecked Sendable {
     private let sdkVersion: String
 
     private var pendingEvents: [EventItemRequest] = []
-    private let lock = NSLock()
     private var flushTask: Task<Void, Never>?
     private var userId: String = ""
 
@@ -70,13 +69,9 @@ internal final class EventTracker: @unchecked Sendable {
             userId: userId
         )
 
-        var shouldFlush = false
-        lock.lock()
         pendingEvents.append(item)
-        shouldFlush = pendingEvents.count >= 20
-        lock.unlock()
 
-        if shouldFlush {
+        if pendingEvents.count >= 20 {
             Task { await flush() }
         }
     }
@@ -87,15 +82,11 @@ internal final class EventTracker: @unchecked Sendable {
     }
 
     func flush() async {
-        let batch: [EventItemRequest]
-        lock.lock()
         if pendingEvents.isEmpty {
-            lock.unlock()
             return
         }
-        batch = pendingEvents
+        let batch = pendingEvents
         pendingEvents.removeAll()
-        lock.unlock()
 
         SDKLogger.debug("Flushing \(batch.count) events")
 
@@ -114,13 +105,11 @@ internal final class EventTracker: @unchecked Sendable {
             SDKLogger.info("Flushed \(batch.count) events successfully")
         } catch {
             SDKLogger.warn("Failed to flush events, re-enqueuing", error)
-            lock.lock()
             pendingEvents.insert(contentsOf: batch, at: 0)
             // Cap at 1000 to prevent unbounded growth
             if pendingEvents.count > 1000 {
                 pendingEvents = Array(pendingEvents.prefix(1000))
             }
-            lock.unlock()
         }
     }
 }

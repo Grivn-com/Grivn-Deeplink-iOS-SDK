@@ -29,24 +29,25 @@
 //  let response = try await DynamicLinksSDK.shared.shorten(dynamicLink: components)
 //  ```
 
-import UIKit
+@preconcurrency import UIKit
 
 @objc
 public final class DynamicLinksSDK: NSObject, @unchecked Sendable {
-    
+
     /// SDK 版本号
     @objc public static let sdkVersion: String = "1.0.3"
-    
+
     // MARK: - 单例 & 线程安全
-    
-    nonisolated(unsafe) private static var lock = DispatchQueue(label: "com.DynamicLinks.lock")
+
+    // Thread safety: all access to static mutable state goes through `lock`
+    nonisolated(unsafe) private static var lock = UnfairLock()
     nonisolated(unsafe) private static var _shared: DynamicLinksSDK?
     nonisolated(unsafe) private static var _isInitialized: Bool = false
     nonisolated(unsafe) private static var _trustAllCerts: Bool = false
     nonisolated(unsafe) private static var _analyticsEnabled: Bool = true
-    
+
     @objc public static var shared: DynamicLinksSDK {
-        return lock.sync {
+        return lock.withLock {
             guard let instance = _shared else {
                 assertionFailure("Must call DynamicLinksSDK.initialize() first")
                 return DynamicLinksSDK()
@@ -54,20 +55,20 @@ public final class DynamicLinksSDK: NSObject, @unchecked Sendable {
             return instance
         }
     }
-    
+
     // MARK: - 配置
-    
+
     private var allowedHosts: [String] = []
     private var baseUrl: String = ""
     private var secretKey: String = ""
     private var projectId: String?
     private var apiService: ApiService?
     private var eventTracker: EventTracker?
-    
+
     private override init() { super.init() }
-    
+
     // MARK: - 初始化
-    
+
     /// 启用或关闭调试模式
     ///
     /// 开启后，SDK 会以 `[GrivnSDK]` 标签输出 DEBUG 级别的日志（初始化、网络请求、
@@ -107,17 +108,17 @@ public final class DynamicLinksSDK: NSObject, @unchecked Sendable {
     /// 必须在 initialize() 之前调用
     @discardableResult
     @objc public static func setTrustAllCerts(_ enabled: Bool) -> DynamicLinksSDK.Type {
-        lock.sync {
+        lock.withLock {
             _trustAllCerts = enabled
         }
         return self
     }
-    
+
     /// Whether analytics data collection is enabled (deferred deeplink & install confirmation).
     /// When disabled, regular deep link handling (Universal Links) continues to work normally.
     @objc public static var analyticsEnabled: Bool {
-        get { lock.sync { _analyticsEnabled } }
-        set { lock.sync { _analyticsEnabled = newValue } }
+        get { lock.withLock { _analyticsEnabled } }
+        set { lock.withLock { _analyticsEnabled = newValue } }
     }
 
     /// Enable or disable analytics data collection (Swift-only fluent API).
@@ -126,16 +127,16 @@ public final class DynamicLinksSDK: NSObject, @unchecked Sendable {
     /// Objective-C: use the `analyticsEnabled` property setter instead.
     @discardableResult
     public static func setAnalyticsEnabled(_ enabled: Bool) -> DynamicLinksSDK.Type {
-        lock.sync { _analyticsEnabled = enabled }
+        lock.withLock { _analyticsEnabled = enabled }
         return self
     }
 
     /// Deferred Deeplink 回调类型
     public typealias DeferredDeeplinkCallback = @Sendable (DeferredDeeplinkData) -> Void
-    
+
     /// Deferred Deeplink 回调
     nonisolated(unsafe) private static var _deferredCallback: DeferredDeeplinkCallback?
-    
+
     /// 初始化 SDK（简单版本，不自动检查 Deferred Deeplink）
     ///
     /// - Parameters:
@@ -150,7 +151,7 @@ public final class DynamicLinksSDK: NSObject, @unchecked Sendable {
     ) -> DynamicLinksSDK {
         return initializeInternal(baseUrl: baseUrl, secretKey: secretKey, projectId: projectId, onDeferredDeeplink: nil)
     }
-    
+
     /// 初始化 SDK 并自动检查 Deferred Deeplink
     ///
     /// SDK 会在首次启动时自动检查是否有延迟深链，并通过回调返回结果。
@@ -185,39 +186,47 @@ public final class DynamicLinksSDK: NSObject, @unchecked Sendable {
     ) -> DynamicLinksSDK {
         return initializeInternal(baseUrl: baseUrl, secretKey: secretKey, projectId: projectId, onDeferredDeeplink: onDeferredDeeplink)
     }
-    
+
     private static func initializeInternal(
         baseUrl: String,
         secretKey: String,
         projectId: String?,
         onDeferredDeeplink: DeferredDeeplinkCallback?
     ) -> DynamicLinksSDK {
-        return lock.sync {
+        // Collect MainActor-isolated values before entering lock.
+        // initialize() is always called from main thread (AppDelegate).
+        dispatchPrecondition(condition: .onQueue(.main))
+        var deviceId = ""
+        var osVersion = ""
+        var appVersion = ""
+        MainActor.assumeIsolated {
+            deviceId = UIDevice.current.identifierForVendor?.uuidString ?? "unknown"
+            osVersion = UIDevice.current.systemVersion
+            appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""
+        }
+
+        return lock.withLock {
             precondition(!baseUrl.isEmpty, "baseUrl cannot be empty")
             precondition(!secretKey.isEmpty, "secretKey cannot be empty")
-            
+
             let instance = DynamicLinksSDK()
             instance.baseUrl = baseUrl.hasSuffix("/") ? String(baseUrl.dropLast()) : baseUrl
             instance.secretKey = secretKey
             instance.projectId = projectId
-            
+
             instance.apiService = ApiService(
                 baseUrl: instance.baseUrl,
                 secretKey: instance.secretKey,
                 timeout: 30,
                 trustAllCerts: _trustAllCerts
             )
-            
+
             _shared = instance
             _isInitialized = true
             _deferredCallback = onDeferredDeeplink
 
             // Initialize event tracker if analytics is enabled and projectId is available
             if _analyticsEnabled, let pid = projectId, let api = instance.apiService {
-                let deviceId = UIDevice.current.identifierForVendor?.uuidString ?? "unknown"
-                let osVersion = UIDevice.current.systemVersion
-                let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""
-
                 instance.eventTracker = EventTracker(
                     apiService: api,
                     projectId: pid,
@@ -227,7 +236,7 @@ public final class DynamicLinksSDK: NSObject, @unchecked Sendable {
                     appVersion: appVersion,
                     sdkVersion: sdkVersion
                 )
-                instance.eventTracker?.start()
+                Task { await instance.eventTracker?.start() }
             }
 
             SDKLogger.info("SDK initialized — baseUrl=\(instance.baseUrl), projectId=\(projectId ?? "(none)"), analyticsEnabled=\(_analyticsEnabled)")
@@ -245,16 +254,16 @@ public final class DynamicLinksSDK: NSObject, @unchecked Sendable {
                     SDKLogger.warn("Auto deferred-deeplink check failed", error)
                 }
             }
-            
+
             return instance
         }
     }
-    
+
     /// 检查是否已初始化
     @objc public static func isInitialized() -> Bool {
-        return lock.sync { _isInitialized }
+        return lock.withLock { _isInitialized }
     }
-    
+
     /// 设置项目 ID（可在 initialize() 后单独设置）
     ///
     /// - Parameter projectId: 项目 ID（用于创建链接）
@@ -263,15 +272,15 @@ public final class DynamicLinksSDK: NSObject, @unchecked Sendable {
         self.projectId = projectId
         return self
     }
-    
+
     /// 配置允许的域名列表
     /// - Parameter allowedHosts: 允许的域名列表 (例如 ["acme.wayp.link", "preview.acme.wayp.link"])
     @objc public static func configure(allowedHosts: [String]) {
-        lock.sync {
+        lock.withLock {
             _shared?.allowedHosts = allowedHosts
         }
     }
-    
+
     private func ensureInitialized() throws {
         guard DynamicLinksSDK.isInitialized() else {
             throw DynamicLinksSDKError.notInitialized
@@ -282,7 +291,7 @@ public final class DynamicLinksSDK: NSObject, @unchecked Sendable {
 // MARK: - 处理动态链接
 
 extension DynamicLinksSDK {
-    
+
     /// 处理动态链接
     ///
     /// - Parameter incomingURL: 收到的动态链接 URL
@@ -325,7 +334,7 @@ extension DynamicLinksSDK {
 
         return dynamicLink
     }
-    
+
     /// 处理动态链接 (Objective-C 兼容)
     @objc
     public func handleDynamicLink(_ incomingURL: URL, completion: @Sendable @escaping (DynamicLink?, NSError?) -> Void) {
@@ -367,13 +376,13 @@ extension DynamicLinksSDK {
     /// - Throws: DynamicLinksSDKError
     public func handlePasteboardDynamicLink() async throws -> DynamicLink {
         let hasCheckedPasteboardKey = "hasCheckedPasteboardForDynamicLink"
-        
+
         if UserDefaults.standard.bool(forKey: hasCheckedPasteboardKey) {
             throw DynamicLinksSDKError.alreadyCheckedPasteboard
         }
-        
+
         UserDefaults.standard.set(true, forKey: hasCheckedPasteboardKey)
-        
+
         let pasteboard = UIPasteboard.general
         if pasteboard.hasURLs {
             if let copiedURLString = pasteboard.string,
@@ -388,7 +397,7 @@ extension DynamicLinksSDK {
         }
         throw DynamicLinksSDKError.noURLInPasteboard
     }
-    
+
     /// 检查并处理粘贴板中的动态链接 (Objective-C 兼容)
     @objc
     public func handlePasteboardDynamicLink(completion: @Sendable @escaping (DynamicLink?, NSError?) -> Void) {
@@ -409,7 +418,7 @@ extension DynamicLinksSDK {
             }
         }
     }
-    
+
     /// 重置粘贴板检查状态（用于测试）
     @objc public func resetPasteboardCheck() {
         UserDefaults.standard.removeObject(forKey: "hasCheckedPasteboardForDynamicLink")
@@ -419,7 +428,7 @@ extension DynamicLinksSDK {
 // MARK: - 缩短链接
 
 extension DynamicLinksSDK {
-    
+
     /// 缩短动态链接
     ///
     /// - Parameters:
@@ -432,19 +441,19 @@ extension DynamicLinksSDK {
         projectId: String? = nil
     ) async throws -> DynamicLinkShortenResponse {
         try ensureInitialized()
-        
+
         guard let apiService = apiService else {
             throw DynamicLinksSDKError.notInitialized
         }
-        
+
         let effectiveProjectId = projectId ?? self.projectId
         guard let finalProjectId = effectiveProjectId else {
             throw DynamicLinksSDKError.projectIdNotSet
         }
-        
+
         return try await apiService.shortenUrl(projectId: finalProjectId, components: dynamicLink)
     }
-    
+
     /// 缩短动态链接 (Objective-C 兼容)
     @objc
     public func shorten(
@@ -473,20 +482,20 @@ extension DynamicLinksSDK {
 // MARK: - 验证链接
 
 extension DynamicLinksSDK {
-    
+
     /// 检查 URL 是否是有效的动态链接
     ///
     /// - Parameter url: 要检查的 URL
     /// - Returns: 如果是有效的动态链接返回 true
     @objc public func isValidDynamicLink(url: URL) -> Bool {
-        guard let host = url.host else {
+        guard url.host != nil else {
             return false
         }
         let canParse = isAllowedCustomDomain(url)
         let matchesShortLinkFormat = url.path.range(of: "/[^/]+", options: .regularExpression) != nil
         return canParse && matchesShortLinkFormat
     }
-    
+
     private func isAllowedCustomDomain(_ url: URL) -> Bool {
         guard let host = url.host else { return false }
         return allowedHosts.contains(host)
@@ -496,7 +505,7 @@ extension DynamicLinksSDK {
 // MARK: - Deferred Deeplink
 
 extension DynamicLinksSDK {
-    
+
     /// 检查并获取延迟深链（首次安装后的 Deeplink）
     ///
     /// 当用户通过 Deeplink 跳转到 App Store 下载 App 后，首次打开时调用此方法获取原始链接数据。
@@ -538,7 +547,7 @@ extension DynamicLinksSDK {
         if !forceCheck && !DeviceFingerprint.isFirstLaunch() {
             return DeferredDeeplinkData(found: false, linkData: nil)
         }
-        
+
         SDKLogger.info("Checking deferred deeplink (forceCheck=\(forceCheck))")
 
         // 标记已检查
@@ -546,8 +555,8 @@ extension DynamicLinksSDK {
 
         do {
             // 服务端会根据请求的 IP + UserAgent 生成指纹进行匹配
-            let userAgent = DeviceFingerprint.getUserAgent()
-            let screenResolution = DeviceFingerprint.getScreenResolution()
+            let userAgent = await DeviceFingerprint.getUserAgent()
+            let screenResolution = await DeviceFingerprint.getScreenResolution()
             let timezone = DeviceFingerprint.getTimezone()
             let language = DeviceFingerprint.getLanguage()
 
@@ -581,7 +590,7 @@ extension DynamicLinksSDK {
             return DeferredDeeplinkData(found: false, linkData: nil)
         }
     }
-    
+
     /// 检查并获取延迟深链 (Objective-C 兼容)
     @objc
     public func checkDeferredDeeplink(
@@ -605,21 +614,21 @@ extension DynamicLinksSDK {
             }
         }
     }
-    
+
     /// 手动确认安装（通常由 checkDeferredDeeplink 自动调用）
     public func confirmInstall() async throws {
         try ensureInitialized()
         try await confirmInstallInternal()
     }
-    
+
     private func confirmInstallInternal() async throws {
         // Analytics opt-out: skip install confirmation
         if !DynamicLinksSDK.analyticsEnabled { return }
 
         guard let apiService = apiService else { return }
 
-        // 服务端会根据请求的 IP + UserAgent 生成指纹（UIDevice 在 Swift 6 中为 MainActor 隔离，需 await）
-        let userAgent = DeviceFingerprint.getUserAgent()
+        // UIDevice properties are @MainActor in Swift 6
+        let userAgent = await DeviceFingerprint.getUserAgent()
         let deviceModel = await MainActor.run { UIDevice.current.model }
         let osVersion = await MainActor.run { UIDevice.current.systemVersion }
         let appVersion = await MainActor.run { Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String }
@@ -635,7 +644,7 @@ extension DynamicLinksSDK {
         trackEvent(name: "app_install")
         SDKLogger.info("Install confirmed")
     }
-    
+
     /// 重置首次启动状态（用于测试）
     @objc
     public func resetDeferredDeeplinkState() {
@@ -646,6 +655,11 @@ extension DynamicLinksSDK {
 // MARK: - Event Tracking
 
 extension DynamicLinksSDK {
+
+    /// Sendable wrapper for `[String: Any]?` params that only contain JSON-primitive values.
+    private struct SendableParams: @unchecked Sendable {
+        let value: [String: Any]?
+    }
 
     /// Track a custom event.
     ///
@@ -661,7 +675,8 @@ extension DynamicLinksSDK {
             SDKLogger.warn("EventTracker not initialized — call initialize() with projectId first")
             return
         }
-        tracker.trackEvent(name: name, params: params)
+        let wrapped = SendableParams(value: params)
+        Task { await tracker.trackEvent(name: name, params: wrapped.value) }
     }
 
     /// Set the user ID for event attribution.
@@ -672,7 +687,7 @@ extension DynamicLinksSDK {
             SDKLogger.warn("EventTracker not initialized — call initialize() with projectId first")
             return
         }
-        tracker.setUserId(userId)
+        Task { await tracker.setUserId(userId) }
     }
 
     /// Flush pending events to the server immediately.
