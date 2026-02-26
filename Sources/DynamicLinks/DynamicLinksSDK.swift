@@ -62,6 +62,7 @@ public final class DynamicLinksSDK: NSObject, @unchecked Sendable {
     private var secretKey: String = ""
     private var projectId: String?
     private var apiService: ApiService?
+    private var eventTracker: EventTracker?
     
     private override init() { super.init() }
     
@@ -211,6 +212,24 @@ public final class DynamicLinksSDK: NSObject, @unchecked Sendable {
             _isInitialized = true
             _deferredCallback = onDeferredDeeplink
 
+            // Initialize event tracker if analytics is enabled and projectId is available
+            if _analyticsEnabled, let pid = projectId, let api = instance.apiService {
+                let deviceId = UIDevice.current.identifierForVendor?.uuidString ?? "unknown"
+                let osVersion = UIDevice.current.systemVersion
+                let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""
+
+                instance.eventTracker = EventTracker(
+                    apiService: api,
+                    projectId: pid,
+                    deviceId: deviceId,
+                    deviceType: "ios",
+                    osVersion: osVersion,
+                    appVersion: appVersion,
+                    sdkVersion: sdkVersion
+                )
+                instance.eventTracker?.start()
+            }
+
             SDKLogger.info("SDK initialized — baseUrl=\(instance.baseUrl), projectId=\(projectId ?? "(none)"), analyticsEnabled=\(_analyticsEnabled)")
 
             // 自动检查 Deferred Deeplink
@@ -292,6 +311,18 @@ extension DynamicLinksSDK {
         }
 
         SDKLogger.info("exchangeShortLink succeeded — longLink=\(longLink)")
+
+        // Auto-event: deeplink_first_open or deeplink_reopen
+        if DynamicLinksSDK.analyticsEnabled {
+            let key = "grivn_deeplink_opened_\(incomingURL.absoluteString)"
+            if !UserDefaults.standard.bool(forKey: key) {
+                UserDefaults.standard.set(true, forKey: key)
+                trackEvent(name: "deeplink_first_open", params: ["url": incomingURL.absoluteString])
+            } else {
+                trackEvent(name: "deeplink_reopen", params: ["url": incomingURL.absoluteString])
+            }
+        }
+
         return dynamicLink
     }
     
@@ -531,6 +562,7 @@ extension DynamicLinksSDK {
 
             if response.found {
                 SDKLogger.info("Deferred deeplink found via fingerprint")
+                trackEvent(name: "deferred_deeplink_match", params: ["match_tier": "fingerprint"])
                 // 确认安装
                 try? await confirmInstallInternal()
             } else {
@@ -600,6 +632,7 @@ extension DynamicLinksSDK {
             osVersion: osVersion,
             appVersion: appVersion
         )
+        trackEvent(name: "app_install")
         SDKLogger.info("Install confirmed")
     }
     
@@ -607,5 +640,45 @@ extension DynamicLinksSDK {
     @objc
     public func resetDeferredDeeplinkState() {
         DeviceFingerprint.resetFirstLaunch()
+    }
+}
+
+// MARK: - Event Tracking
+
+extension DynamicLinksSDK {
+
+    /// Track a custom event.
+    ///
+    /// Events are batched locally and flushed to the server every 30 seconds
+    /// or when 20 events accumulate.
+    ///
+    /// - Parameters:
+    ///   - name: Event name (e.g. "purchase", "sign_up")
+    ///   - params: Optional event parameters
+    public func trackEvent(name: String, params: [String: Any]? = nil) {
+        guard DynamicLinksSDK.analyticsEnabled else { return }
+        guard let tracker = eventTracker else {
+            SDKLogger.warn("EventTracker not initialized — call initialize() with projectId first")
+            return
+        }
+        tracker.trackEvent(name: name, params: params)
+    }
+
+    /// Set the user ID for event attribution.
+    ///
+    /// - Parameter userId: User identifier (e.g. your app's user ID)
+    @objc public func setUserId(_ userId: String) {
+        guard let tracker = eventTracker else {
+            SDKLogger.warn("EventTracker not initialized — call initialize() with projectId first")
+            return
+        }
+        tracker.setUserId(userId)
+    }
+
+    /// Flush pending events to the server immediately.
+    @objc public func flushEvents() {
+        Task {
+            await eventTracker?.flush()
+        }
     }
 }

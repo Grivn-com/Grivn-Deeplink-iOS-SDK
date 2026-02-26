@@ -69,6 +69,60 @@ internal struct DeferredDeeplinkResponse: Decodable {
     let link_data: [String: AnyCodable]?
 }
 
+/// 事件批量上报请求
+internal struct EventBatchRequest: Encodable {
+    let projectId: String
+    let deviceId: String
+    let deviceType: String
+    let osVersion: String
+    let appVersion: String
+    let sdkVersion: String
+    let events: [EventItemRequest]
+
+    enum CodingKeys: String, CodingKey {
+        case projectId = "project_id"
+        case deviceId = "device_id"
+        case deviceType = "device_type"
+        case osVersion = "os_version"
+        case appVersion = "app_version"
+        case sdkVersion = "sdk_version"
+        case events
+    }
+}
+
+/// 单个事件
+internal struct EventItemRequest: Encodable {
+    let eventName: String
+    let params: [String: Any]?
+    let timestamp: TimeInterval?
+    let deeplinkId: String
+    let userId: String
+
+    enum CodingKeys: String, CodingKey {
+        case eventName = "event_name"
+        case params
+        case timestamp
+        case deeplinkId = "deeplink_id"
+        case userId = "user_id"
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(eventName, forKey: .eventName)
+        try container.encodeIfPresent(timestamp, forKey: .timestamp)
+        try container.encode(deeplinkId, forKey: .deeplinkId)
+        try container.encode(userId, forKey: .userId)
+        if let params = params {
+            try container.encode(params.mapValues { AnyCodable($0) }, forKey: .params)
+        }
+    }
+}
+
+/// 事件批量上报响应
+internal struct EventBatchResponse: Decodable {
+    let accepted: Int
+}
+
 /// 确认安装请求
 /// 注意：不发送 fingerprint_id，服务端会根据 IP + UserAgent 自动生成
 internal struct ConfirmInstallRequest: Encodable {
@@ -259,6 +313,12 @@ internal final class ApiService: @unchecked Sendable {
         return try await post(url: url, body: body)
     }
     
+    /// 批量上报 SDK 事件
+    func trackEvents(request: EventBatchRequest) async throws -> EventBatchResponse {
+        let url = URL(string: "\(baseUrl)/api/v1/events")!
+        return try await post(url: url, body: request)
+    }
+
     /// 确认安装
     /// 服务端会根据请求的 IP + UserAgent 生成指纹进行匹配
     func confirmInstall(
