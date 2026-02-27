@@ -2,30 +2,30 @@
 //  DynamicLinksSDK.swift
 //  DynamicLinks
 //
-//  DynamicLinks SDK 主入口
+//  Main entry point for the DynamicLinks SDK.
 //
-//  使用示例:
+//  Usage example:
 //  ```swift
-//  // 初始化（仅处理链接时）
+//  // Initialize (only handling links)
 //  DynamicLinksSDK.initialize(
 //      baseUrl: "https://api.grivn.com",
 //      secretKey: "your_secret_key"
 //  )
 //
-//  // 初始化（需要创建链接时，需要提供 projectId）
+//  // Initialize (also creating links, requires projectId)
 //  DynamicLinksSDK.initialize(
 //      baseUrl: "https://api.grivn.com",
 //      secretKey: "your_secret_key",
 //      projectId: "your_project_id"
 //  )
 //
-//  // 可选配置
+//  // Optional configuration
 //  DynamicLinksSDK.configure(allowedHosts: ["acme.wayp.link"])
 //
-//  // 处理动态链接
+//  // Handle a dynamic link
 //  let dynamicLink = try await DynamicLinksSDK.shared.handleDynamicLink(incomingURL)
 //
-//  // 缩短链接（需要 projectId）
+//  // Shorten a link (requires projectId)
 //  let response = try await DynamicLinksSDK.shared.shorten(dynamicLink: components)
 //  ```
 
@@ -34,10 +34,10 @@
 @objc
 public final class DynamicLinksSDK: NSObject, @unchecked Sendable {
 
-    /// SDK 版本号
+    /// SDK version.
     @objc public static let sdkVersion: String = "1.0.9"
     
-    // MARK: - 单例 & 线程安全
+    // MARK: - Singleton & thread safety
 
     // Thread safety: all access to static mutable state goes through `lock`
     nonisolated(unsafe) private static var lock = UnfairLock()
@@ -56,7 +56,7 @@ public final class DynamicLinksSDK: NSObject, @unchecked Sendable {
         }
     }
 
-    // MARK: - 配置
+    // MARK: - Configuration
 
     private var allowedHosts: [String] = []
     private var baseUrl: String = ""
@@ -67,45 +67,47 @@ public final class DynamicLinksSDK: NSObject, @unchecked Sendable {
 
     private override init() { super.init() }
 
-    // MARK: - 初始化
+    // MARK: - Initialization
 
-    /// 启用或关闭调试模式
+    /// Enables or disables debug mode.
     ///
-    /// 开启后，SDK 会以 `[GrivnSDK]` 标签输出 DEBUG 级别的日志（初始化、网络请求、
-    /// Deferred Deeplink 检查等）。关闭后完全静默（NONE）。
+    /// When enabled, the SDK outputs DEBUG-level logs with the `[GrivnSDK]`
+    /// tag (initialization, network requests, deferred deeplink checks, etc.).
+    /// When disabled, logging is completely silent (`none`).
     ///
-    /// - Parameter enabled: true 为开启（DEBUG 级别），false 为关闭（NONE）
+    /// - Parameter enabled: `true` for DEBUG level, `false` for `none`.
     @discardableResult
     @objc public static func setDebugMode(_ enabled: Bool) -> DynamicLinksSDK.Type {
         SDKLogger.shared.logLevel = enabled ? .debug : .none
         return self
     }
 
-    /// 设置日志级别
+    /// Sets the log level.
     ///
-    /// 可选级别：debug、info、warn、error、none（默认 none，完全静默）。
+    /// Available levels: `debug`, `info`, `warn`, `error`, `none`
+    /// (default is `.none`, completely silent).
     ///
-    /// - Parameter level: 日志级别
+    /// - Parameter level: Log level.
     @discardableResult
     public static func setLogLevel(_ level: LogLevel) -> DynamicLinksSDK.Type {
         SDKLogger.shared.logLevel = level
         return self
     }
 
-    /// 注册自定义日志处理器
+    /// Registers a custom log handler.
     ///
-    /// 开发者可实现 `DynamicLinksLogHandler` 协议，将 SDK 日志接入
-    /// CocoaLumberjack、Firebase Crashlytics 等外部日志系统。
+    /// Implement the `DynamicLinksLogHandler` protocol to forward SDK logs
+    /// into CocoaLumberjack, Firebase Crashlytics, or other logging systems.
     ///
-    /// - Parameter handler: 自定义日志处理器
+    /// - Parameter handler: Custom log handler.
     @discardableResult
     public static func setLogger(_ handler: DynamicLinksLogHandler) -> DynamicLinksSDK.Type {
         SDKLogger.shared.handler = handler
         return self
     }
 
-    /// 设置是否信任所有证书（仅开发环境使用）
-    /// 必须在 initialize() 之前调用
+    /// Controls whether to trust all SSL certificates (development only).
+    /// Must be called before `initialize()`.
     @discardableResult
     @objc public static func setTrustAllCerts(_ enabled: Bool) -> DynamicLinksSDK.Type {
         lock.withLock {
@@ -131,18 +133,18 @@ public final class DynamicLinksSDK: NSObject, @unchecked Sendable {
         return self
     }
 
-    /// Deferred Deeplink 回调类型
+    /// Deferred deeplink callback type.
     public typealias DeferredDeeplinkCallback = @Sendable (DeferredDeeplinkData) -> Void
 
-    /// Deferred Deeplink 回调
+    /// Deferred deeplink callback instance.
     nonisolated(unsafe) private static var _deferredCallback: DeferredDeeplinkCallback?
 
-    /// 初始化 SDK（简单版本，不自动检查 Deferred Deeplink）
+    /// Initializes the SDK (simple version, without automatic deferred deeplink check).
     ///
     /// - Parameters:
-    ///   - baseUrl: 后端 API Base URL (例如 "https://api.grivn.com")
-    ///   - secretKey: Secret Key（通过 X-API-Key header 发送）
-    ///   - projectId: 项目 ID（可选，用于创建链接时指定所属项目）
+    ///   - baseUrl: Backend API base URL (e.g. `"https://api.grivn.com"`).
+    ///   - secretKey: Secret key (sent via the `X-API-Key` header).
+    ///   - projectId: Optional project ID (used when creating links).
     @discardableResult
     @objc public static func initialize(
         baseUrl: String,
@@ -152,31 +154,33 @@ public final class DynamicLinksSDK: NSObject, @unchecked Sendable {
         return initializeInternal(baseUrl: baseUrl, secretKey: secretKey, projectId: projectId, onDeferredDeeplink: nil)
     }
 
-    /// 初始化 SDK 并自动检查 Deferred Deeplink
+    /// Initializes the SDK and automatically checks for deferred deeplinks.
     ///
-    /// SDK 会在首次启动时自动检查是否有延迟深链，并通过回调返回结果。
-    /// 开发者无需额外调用 checkDeferredDeeplink()。
+    /// On first launch, the SDK will automatically check whether there is a
+    /// deferred deeplink and return the result via the callback. You do not
+    /// need to call `checkDeferredDeeplink()` manually.
     ///
-    /// 使用示例:
+    /// Usage example:
     /// ```swift
-    /// // 在 AppDelegate.didFinishLaunchingWithOptions 中调用
+    /// // Call from AppDelegate.didFinishLaunchingWithOptions
     /// DynamicLinksSDK.initialize(
     ///     baseUrl: "https://api.grivn.com",
     ///     secretKey: "your_secret_key",
     ///     projectId: "your_project_id"
     /// ) { result in
     ///     if result.found {
-    ///         // 处理延迟深链
+    ///         // Handle deferred deeplink
     ///         print("Found deferred deeplink: \(result.originalUrl ?? "")")
     ///     }
     /// }
     /// ```
     ///
     /// - Parameters:
-    ///   - baseUrl: 后端 API Base URL
-    ///   - secretKey: Secret Key
-    ///   - projectId: 项目 ID（可选）
-    ///   - onDeferredDeeplink: 延迟深链回调（可选，不传则静默上报安装）
+    ///   - baseUrl: Backend API base URL.
+    ///   - secretKey: Secret key.
+    ///   - projectId: Optional project ID.
+    ///   - onDeferredDeeplink: Optional deferred deeplink callback; if nil,
+    ///     the SDK will silently report the install.
     @discardableResult
     public static func initialize(
         baseUrl: String,
@@ -241,7 +245,7 @@ public final class DynamicLinksSDK: NSObject, @unchecked Sendable {
 
             SDKLogger.info("SDK initialized — baseUrl=\(instance.baseUrl), projectId=\(projectId ?? "(none)"), analyticsEnabled=\(_analyticsEnabled)")
 
-            // 自动检查 Deferred Deeplink
+            // Automatically check deferred deeplink
             Task {
                 do {
                     let result = try await instance.checkDeferredDeeplink(forceCheck: false)
@@ -259,22 +263,22 @@ public final class DynamicLinksSDK: NSObject, @unchecked Sendable {
         }
     }
 
-    /// 检查是否已初始化
+    /// Returns whether the SDK has been initialized.
     @objc public static func isInitialized() -> Bool {
         return lock.withLock { _isInitialized }
     }
 
-    /// 设置项目 ID（可在 initialize() 后单独设置）
+    /// Sets the project ID (can be called after `initialize()`).
     ///
-    /// - Parameter projectId: 项目 ID（用于创建链接）
+    /// - Parameter projectId: Project ID used when creating links.
     @discardableResult
     @objc public func setProjectId(_ projectId: String) -> DynamicLinksSDK {
         self.projectId = projectId
         return self
     }
 
-    /// 配置允许的域名列表
-    /// - Parameter allowedHosts: 允许的域名列表 (例如 ["acme.wayp.link", "preview.acme.wayp.link"])
+    /// Configures the list of allowed domains.
+    /// - Parameter allowedHosts: Allowed hostnames (e.g. `["acme.wayp.link", "preview.acme.wayp.link"]`).
     @objc public static func configure(allowedHosts: [String]) {
         lock.withLock {
             _shared?.allowedHosts = allowedHosts
@@ -288,15 +292,15 @@ public final class DynamicLinksSDK: NSObject, @unchecked Sendable {
     }
 }
 
-// MARK: - 处理动态链接
+// MARK: - Dynamic link handling
 
 extension DynamicLinksSDK {
 
-    /// 处理动态链接
+    /// Handles an incoming dynamic link URL.
     ///
-    /// - Parameter incomingURL: 收到的动态链接 URL
-    /// - Returns: 解析后的 DynamicLink 对象
-    /// - Throws: DynamicLinksSDKError
+    /// - Parameter incomingURL: The received dynamic link URL.
+    /// - Returns: A parsed `DynamicLink` object.
+    /// - Throws: `DynamicLinksSDKError` on failure.
     public func handleDynamicLink(_ incomingURL: URL) async throws -> DynamicLink {
         try ensureInitialized()
 
@@ -335,7 +339,7 @@ extension DynamicLinksSDK {
         return dynamicLink
     }
 
-    /// 处理动态链接 (Objective-C 兼容)
+    /// Handles a dynamic link (Objective-C compatibility).
     @objc
     public func handleDynamicLink(_ incomingURL: URL, completion: @Sendable @escaping (DynamicLink?, NSError?) -> Void) {
         Task {
@@ -357,7 +361,7 @@ extension DynamicLinksSDK {
     }
 }
 
-// MARK: - 粘贴板链接检测
+// MARK: - Pasteboard link detection
 
 extension DynamicLinksSDK {
 
@@ -369,11 +373,11 @@ extension DynamicLinksSDK {
         return UIPasteboard.general.hasURLs
     }
 
-    /// 检查并处理粘贴板中的动态链接
-    /// 每次 App 启动只会检查一次粘贴板
+    /// Checks and handles a dynamic link from the pasteboard.
+    /// The pasteboard is only checked once per app launch.
     ///
-    /// - Returns: 解析后的 DynamicLink 对象
-    /// - Throws: DynamicLinksSDKError
+    /// - Returns: A parsed `DynamicLink` object.
+    /// - Throws: `DynamicLinksSDKError`.
     public func handlePasteboardDynamicLink() async throws -> DynamicLink {
         let hasCheckedPasteboardKey = "hasCheckedPasteboardForDynamicLink"
 
@@ -388,7 +392,7 @@ extension DynamicLinksSDK {
             if let copiedURLString = pasteboard.string,
                let url = URL(string: copiedURLString) {
                 let dynamicLink = try await handleDynamicLink(url)
-                // 清除粘贴板中的链接
+                // Clear the link from the pasteboard
                 if pasteboard.string == copiedURLString {
                     pasteboard.string = nil
                 }
@@ -398,7 +402,7 @@ extension DynamicLinksSDK {
         throw DynamicLinksSDKError.noURLInPasteboard
     }
 
-    /// 检查并处理粘贴板中的动态链接 (Objective-C 兼容)
+    /// Checks and handles a dynamic link from the pasteboard (Objective-C compatibility).
     @objc
     public func handlePasteboardDynamicLink(completion: @Sendable @escaping (DynamicLink?, NSError?) -> Void) {
         Task {
@@ -419,23 +423,24 @@ extension DynamicLinksSDK {
         }
     }
 
-    /// 重置粘贴板检查状态（用于测试）
+    /// Resets the pasteboard-check state (for testing).
     @objc public func resetPasteboardCheck() {
         UserDefaults.standard.removeObject(forKey: "hasCheckedPasteboardForDynamicLink")
     }
 }
 
-// MARK: - 缩短链接
+// MARK: - Shortening links
 
 extension DynamicLinksSDK {
 
-    /// 缩短动态链接
+    /// Shortens a dynamic link.
     ///
     /// - Parameters:
-    ///   - dynamicLink: DynamicLinkComponents 对象
-    ///   - projectId: 项目 ID（可选，如果未在 initialize() 或 setProjectId() 中设置，则必须在此传入）
-    /// - Returns: DynamicLinkShortenResponse
-    /// - Throws: DynamicLinksSDKError
+    ///   - dynamicLink: `DynamicLinkComponents` describing the link.
+    ///   - projectId: Optional project ID. If not set via `initialize()` or
+    ///     `setProjectId()`, it must be provided here.
+    /// - Returns: `DynamicLinkShortenResponse`.
+    /// - Throws: `DynamicLinksSDKError`.
     public func shorten(
         dynamicLink: DynamicLinkComponents,
         projectId: String? = nil
@@ -454,7 +459,7 @@ extension DynamicLinksSDK {
         return try await apiService.shortenUrl(projectId: finalProjectId, components: dynamicLink)
     }
 
-    /// 缩短动态链接 (Objective-C 兼容)
+    /// Shortens a dynamic link (Objective-C compatibility).
     @objc
     public func shorten(
         dynamicLink: DynamicLinkComponents,
@@ -479,14 +484,14 @@ extension DynamicLinksSDK {
     }
 }
 
-// MARK: - 验证链接
+// MARK: - Link validation
 
 extension DynamicLinksSDK {
 
-    /// 检查 URL 是否是有效的动态链接
+    /// Checks whether the given URL is a valid dynamic link.
     ///
-    /// - Parameter url: 要检查的 URL
-    /// - Returns: 如果是有效的动态链接返回 true
+    /// - Parameter url: URL to check.
+    /// - Returns: `true` if the URL is a valid dynamic link.
     @objc public func isValidDynamicLink(url: URL) -> Bool {
         guard url.host != nil else {
             return false
@@ -506,31 +511,34 @@ extension DynamicLinksSDK {
 
 extension DynamicLinksSDK {
 
-    /// 检查并获取延迟深链（首次安装后的 Deeplink）
+    /// Checks for and retrieves a deferred deeplink (post-install deeplink).
     ///
-    /// 当用户通过 Deeplink 跳转到 App Store 下载 App 后，首次打开时调用此方法获取原始链接数据。
-    /// 此方法只会在首次启动时返回数据，后续调用将返回 found=false。
+    /// When a user is redirected to the App Store via a deeplink and installs
+    /// the app, call this method on first launch to obtain the original link
+    /// data. This method only returns data on the first launch; subsequent
+    /// calls will return `found = false`.
     ///
-    /// 注意：服务端会根据请求的 IP 地址和 User-Agent 生成指纹进行匹配，
-    /// 因此用户必须在相同的网络环境下（相同 IP）才能匹配成功。
+    /// Note: The server generates a fingerprint using the request IP address
+    /// and User-Agent, so the user must be on the same network (same IP) to
+    /// be matched successfully.
     ///
-    /// 使用示例:
+    /// Usage example:
     /// ```swift
-    /// // 在 AppDelegate 或 SceneDelegate 中调用
+    /// // Call from AppDelegate or SceneDelegate
     /// Task {
     ///     let result = try await DynamicLinksSDK.shared.checkDeferredDeeplink()
     ///     if result.found {
-    ///         // 处理延迟深链
+    ///         // Handle deferred deeplink
     ///         let deeplinkId = result.deeplinkId
     ///         let utmSource = result.utmSource
-    ///         // 导航到目标页面...
+    ///         // Navigate to the target screen...
     ///     }
     /// }
     /// ```
     ///
-    /// - Parameter forceCheck: 是否强制检查（忽略首次启动标记，用于测试）
-    /// - Returns: DeferredDeeplinkData 包含是否找到延迟深链及链接数据
-    /// - Throws: DynamicLinksSDKError.notInitialized 如果 SDK 未初始化
+    /// - Parameter forceCheck: Whether to force a check (ignores the first-launch flag, useful for testing).
+    /// - Returns: `DeferredDeeplinkData` containing whether a deferred deeplink was found and its data.
+    /// - Throws: `DynamicLinksSDKError.notInitialized` if the SDK has not been initialized.
     public func checkDeferredDeeplink(forceCheck: Bool = false) async throws -> DeferredDeeplinkData {
         try ensureInitialized()
 
@@ -543,18 +551,18 @@ extension DynamicLinksSDK {
             throw DynamicLinksSDKError.notInitialized
         }
 
-        // 检查是否是首次启动
+        // Check whether this is the first launch
         if !forceCheck && !DeviceFingerprint.isFirstLaunch() {
             return DeferredDeeplinkData(found: false, linkData: nil)
         }
 
         SDKLogger.info("Checking deferred deeplink (forceCheck=\(forceCheck))")
 
-        // 标记已检查
+        // Mark that the first-launch check has been performed
         DeviceFingerprint.markFirstLaunchChecked()
 
         do {
-            // 服务端会根据请求的 IP + UserAgent 生成指纹进行匹配
+            // The server performs fingerprint matching based on IP + User-Agent.
             let userAgent = await DeviceFingerprint.getUserAgent()
             let screenResolution = await DeviceFingerprint.getScreenResolution()
             let timezone = DeviceFingerprint.getTimezone()
@@ -572,13 +580,12 @@ extension DynamicLinksSDK {
             if response.found {
                 SDKLogger.info("Deferred deeplink found via fingerprint")
                 trackEvent(name: "deferred_deeplink_match", params: ["match_tier": "fingerprint"])
-                // 确认安装
                 try? await confirmInstallInternal()
             } else {
                 SDKLogger.info("No deferred deeplink found")
             }
 
-            // 转换 link_data
+            // Convert `link_data` to `[String: Any]`
             var linkData: [String: Any]? = nil
             if let data = response.link_data {
                 linkData = data.mapValues { $0.value }
@@ -591,7 +598,7 @@ extension DynamicLinksSDK {
         }
     }
 
-    /// 检查并获取延迟深链 (Objective-C 兼容)
+    /// Checks for and retrieves a deferred deeplink (Objective-C compatibility).
     @objc
     public func checkDeferredDeeplink(
         forceCheck: Bool = false,
@@ -615,7 +622,7 @@ extension DynamicLinksSDK {
         }
     }
 
-    /// 手动确认安装（通常由 checkDeferredDeeplink 自动调用）
+    /// Manually confirms an install (normally called by `checkDeferredDeeplink`).
     public func confirmInstall() async throws {
         try ensureInitialized()
         try await confirmInstallInternal()
@@ -645,7 +652,7 @@ extension DynamicLinksSDK {
         SDKLogger.info("Install confirmed")
     }
 
-    /// 重置首次启动状态（用于测试）
+    /// Resets the first-launch state (for testing).
     @objc
     public func resetDeferredDeeplinkState() {
         DeviceFingerprint.resetFirstLaunch()

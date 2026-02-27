@@ -5,10 +5,10 @@
 
 import Foundation
 
-/// 解析短链接的响应
-/// 后端返回的是 URL query parameters，SDK 将其组装成长链接
+/// Response for resolving a short link.
+/// The backend returns URL query parameters, and the SDK assembles them into a long link.
 public struct ExchangeLinkResponse: Decodable, Sendable {
-    // 后端返回的各个参数字段
+    // Parameter fields returned by the backend
     public let link: String?
     public let apn: String?
     public let afl: String?
@@ -35,14 +35,14 @@ public struct ExchangeLinkResponse: Decodable, Sendable {
     public let mt: String?
     public let pt: String?
     
-    /// 将后端返回的参数组装成长链接 URL
+    /// Builds a long-link `URL` from the parameters returned by the backend.
     public var longLink: URL? {
         guard let baseLink = link else { return nil }
         
         var components = URLComponents(string: "https://dynamiclinks.local")
         var queryItems: [URLQueryItem] = []
         
-        // 添加所有非空参数
+        // Append all non-empty parameters
         queryItems.append(URLQueryItem(name: "link", value: baseLink))
         if let apn = apn { queryItems.append(URLQueryItem(name: "apn", value: apn)) }
         if let afl = afl { queryItems.append(URLQueryItem(name: "afl", value: afl)) }

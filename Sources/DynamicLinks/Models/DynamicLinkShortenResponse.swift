@@ -5,26 +5,26 @@
 
 import Foundation
 
-/// 缩短链接的响应
+/// Response returned when shortening a dynamic link.
 @objcMembers
 public final class DynamicLinkShortenResponse: NSObject, Decodable, @unchecked Sendable {
     
-    /// 链接 ID
+    /// Link identifier.
     public let id: String
     
-    /// 短链接字符串
+    /// Short link as a string.
     public let shortLinkString: String
     
-    /// 原始链接
+    /// Original link URL string.
     public let link: String
     
-    /// 链接名称
+    /// Optional link name.
     public let name: String?
     
-    /// 警告信息列表
+    /// List of warning messages.
     public let warnings: [Warning]
     
-    /// 短链接 URL
+    /// Short link as a `URL`.
     public var shortLink: URL? {
         URL(string: shortLinkString)
     }

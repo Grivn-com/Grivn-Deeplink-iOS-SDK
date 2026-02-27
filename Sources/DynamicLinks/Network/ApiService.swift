@@ -5,14 +5,14 @@
 
 import Foundation
 
-/// API 请求响应基类（后端可能只返回 data，无 code/message）
+/// Base API response type (backend may return only `data` without `code`/`message`).
 internal struct BaseApiResponse<T: Decodable>: Decodable {
     let code: Int?
     let message: String?
     let data: T?
 }
 
-/// 创建 Deeplink 请求
+/// Request payload for creating a deeplink.
 internal struct DeeplinkCreateRequest: Encodable {
     let projectId: String
     let name: String
@@ -49,13 +49,13 @@ internal struct DeeplinkCreateRequest: Encodable {
     let pt: String?
 }
 
-/// 解析短链接请求
+/// Request payload for resolving a short link.
 internal struct ExchangeShortLinkRequest: Encodable {
     let requestedLink: String
 }
 
-/// 获取延迟深链请求
-/// 注意：不发送 fingerprint_id，服务端会根据 IP + UserAgent 自动生成
+/// Request payload for retrieving a deferred deeplink.
+/// Note: `fingerprint_id` is not sent; the server generates it from IP + User-Agent.
 internal struct DeferredDeeplinkRequest: Encodable {
     let user_agent: String
     let screen_resolution: String?
@@ -63,14 +63,14 @@ internal struct DeferredDeeplinkRequest: Encodable {
     let language: String?
 }
 
-/// 延迟深链响应
+/// Response payload for a deferred deeplink.
 internal struct DeferredDeeplinkResponse: Decodable {
     let found: Bool
     let link_data: [String: AnyCodable]?
 }
 
-/// 事件批量上报请求
-/// @unchecked Sendable: params contain only JSON-primitive values
+/// Request payload for batching analytics events.
+/// @unchecked Sendable: params contain only JSON-primitive values.
 internal struct EventBatchRequest: Encodable, @unchecked Sendable {
     let projectId: String
     let deviceId: String
@@ -91,8 +91,8 @@ internal struct EventBatchRequest: Encodable, @unchecked Sendable {
     }
 }
 
-/// 单个事件
-/// @unchecked Sendable: params contain only JSON-primitive values
+/// Single analytics event within a batch.
+/// @unchecked Sendable: params contain only JSON-primitive values.
 internal struct EventItemRequest: Encodable, @unchecked Sendable {
     let eventName: String
     let params: [String: Any]?
@@ -120,13 +120,13 @@ internal struct EventItemRequest: Encodable, @unchecked Sendable {
     }
 }
 
-/// 事件批量上报响应
+/// Response payload for a batched event submission.
 internal struct EventBatchResponse: Decodable {
     let accepted: Int
 }
 
-/// 确认安装请求
-/// 注意：不发送 fingerprint_id，服务端会根据 IP + UserAgent 自动生成
+/// Request payload for confirming an install.
+/// Note: `fingerprint_id` is not sent; the server generates it from IP + User-Agent.
 internal struct ConfirmInstallRequest: Encodable {
     let user_agent: String
     let device_model: String?
@@ -134,13 +134,13 @@ internal struct ConfirmInstallRequest: Encodable {
     let app_version: String?
 }
 
-/// 确认安装响应
+/// Response payload for confirming an install.
 internal struct ConfirmInstallResponse: Decodable {
     let success: Bool
     let message: String?
 }
 
-/// 用于解码任意 JSON 值
+/// Helper wrapper used to decode arbitrary JSON values.
 internal struct AnyCodable: Codable {
     let value: Any
     
@@ -194,8 +194,8 @@ internal struct AnyCodable: Codable {
     }
 }
 
-/// API 服务类
-/// 通过 X-API-Key header 进行认证
+/// API service used by the SDK.
+/// Authentication is done via the `X-API-Key` header.
 internal final class ApiService: Sendable {
 
     private let baseUrl: String
@@ -234,7 +234,7 @@ internal final class ApiService: Sendable {
         }
     }
     
-    /// 创建短链接 (缩短链接)
+    /// Creates a short link from the given components.
     func shortenUrl(
         projectId: String,
         components: DynamicLinkComponents
@@ -280,7 +280,7 @@ internal final class ApiService: Sendable {
         return try await post(url: url, body: body)
     }
     
-    /// 解析短链接 (还原长链接)
+    /// Resolves a short link back to its long-link representation.
     func exchangeShortLink(requestedLink: URL) async throws -> ExchangeLinkResponse {
         let url = URL(string: "\(baseUrl)/api/v1/deeplinks/exchangeShortLink")!
         
@@ -289,8 +289,8 @@ internal final class ApiService: Sendable {
         return try await post(url: url, body: body)
     }
     
-    /// 获取延迟深链
-    /// 服务端会根据请求的 IP + UserAgent 生成指纹进行匹配
+    /// Retrieves a deferred deeplink.
+    /// The server performs fingerprint matching based on IP + User-Agent.
     func getDeferredDeeplink(
         userAgent: String,
         screenResolution: String?,
@@ -309,14 +309,14 @@ internal final class ApiService: Sendable {
         return try await post(url: url, body: body)
     }
     
-    /// 批量上报 SDK 事件
+    /// Sends a batch of SDK events.
     func trackEvents(request: EventBatchRequest) async throws -> EventBatchResponse {
         let url = URL(string: "\(baseUrl)/api/v1/events")!
         return try await post(url: url, body: request)
     }
 
-    /// 确认安装
-    /// 服务端会根据请求的 IP + UserAgent 生成指纹进行匹配
+    /// Confirms an install.
+    /// The server performs fingerprint matching based on IP + User-Agent.
     func confirmInstall(
         userAgent: String,
         deviceModel: String?,
@@ -335,7 +335,7 @@ internal final class ApiService: Sendable {
         return try await post(url: url, body: body)
     }
     
-    /// POST 请求
+    /// Issues a POST request and decodes the response.
     private func post<T: Encodable, R: Decodable>(url: URL, body: T) async throws -> R {
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -372,7 +372,7 @@ internal final class ApiService: Sendable {
             throw DynamicLinksSDKError.networkError(message: "Empty response", cause: nil)
         }
 
-        // 优先尝试带 code/data 包装
+        // Prefer decoding the wrapped `code`/`data` format first.
         if let wrapped = try? decoder.decode(BaseApiResponse<R>.self, from: data) {
             let status = wrapped.code ?? 0
             if status != 0 {
@@ -384,7 +384,7 @@ internal final class ApiService: Sendable {
             }
         }
 
-        // 兼容后端直接返回 data 对象（无包装）
+        // Fallback: support backend responses that return the bare `data` object without wrapping.
         if let direct = try? decoder.decode(R.self, from: data) {
             return direct
         }
@@ -394,8 +394,8 @@ internal final class ApiService: Sendable {
     }
 }
 
-/// 信任所有证书的代理 (仅开发环境使用)
-/// @unchecked Sendable: stateless delegate, safe to share across threads
+/// Delegate that trusts all certificates (development only).
+/// @unchecked Sendable: stateless delegate, safe to share across threads.
 private final class TrustAllCertsDelegate: NSObject, URLSessionDelegate, @unchecked Sendable {
     func urlSession(
         _ session: URLSession,

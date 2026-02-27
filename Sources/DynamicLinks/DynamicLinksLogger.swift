@@ -2,31 +2,32 @@
 //  DynamicLinksLogger.swift
 //  DynamicLinks
 //
-//  SDK 日志框架
+//  SDK logging framework.
 //
 
 import Foundation
 import os.log
 
-/// SDK 日志级别
+/// SDK log levels.
 @objc public enum LogLevel: Int, Sendable {
-    /// 详细调试信息（API 请求/响应、指纹详情等）
+    /// Verbose debug information (API request/response, fingerprint details, etc.).
     case debug = 0
-    /// 关键流程信息（初始化、匹配结果等）
+    /// Key flow information (initialization, matching results, etc.).
     case info = 1
-    /// 可恢复的异常（网络超时重试、非关键失败等）
+    /// Recoverable issues (network timeouts with retries, non-critical failures, etc.).
     case warn = 2
-    /// 不可恢复的错误
+    /// Non-recoverable errors.
     case error = 3
-    /// 完全静默
+    /// Completely silent.
     case none = 4
 }
 
-/// SDK 日志接口
+/// SDK logging interface.
 ///
-/// 开发者可实现此协议，将 SDK 日志接入 CocoaLumberjack、Firebase Crashlytics 等外部日志系统。
+/// Implement this protocol to forward SDK logs into CocoaLumberjack,
+/// Firebase Crashlytics, or other external logging systems.
 ///
-/// 使用示例:
+/// Example:
 /// ```swift
 /// class MyLogHandler: DynamicLinksLogHandler {
 ///     func log(level: LogLevel, tag: String, message: String, error: Error?) {
@@ -36,17 +37,17 @@ import os.log
 /// DynamicLinksSDK.setLogger(MyLogHandler())
 /// ```
 public protocol DynamicLinksLogHandler: Sendable {
-    /// 输出日志
+    /// Outputs a log entry.
     ///
     /// - Parameters:
-    ///   - level: 日志级别
-    ///   - tag: 日志标签（固定为 "GrivnSDK"）
-    ///   - message: 日志内容
-    ///   - error: 关联的错误（可选）
+    ///   - level: Log level.
+    ///   - tag: Log tag (fixed to `"GrivnSDK"`).
+    ///   - message: Log message.
+    ///   - error: Optional associated error.
     func log(level: LogLevel, tag: String, message: String, error: Error?)
 }
 
-/// 默认日志实现，使用 os_log
+/// Default log implementation using `os_log`.
 internal final class DefaultLogHandler: DynamicLinksLogHandler {
     private let osLog = OSLog(subsystem: "com.grivn.dynamiclinks", category: "GrivnSDK")
 
@@ -69,10 +70,11 @@ internal final class DefaultLogHandler: DynamicLinksLogHandler {
     }
 }
 
-/// SDK 内部日志工具
+/// Internal SDK logging utility.
 ///
-/// 生产模式（默认）完全静默。调用 `DynamicLinksSDK.setDebugMode(true)` 后
-/// 以 `[GrivnSDK]` 标签输出调试信息。
+/// In production mode (default) this is completely silent. After calling
+/// `DynamicLinksSDK.setDebugMode(true)` it outputs debug information with
+/// the `[GrivnSDK]` tag.
 internal final class SDKLogger: Sendable {
     static let shared = SDKLogger()
 
@@ -115,7 +117,7 @@ internal final class SDKLogger: Sendable {
         shared.handler.log(level: .error, tag: TAG, message: message, error: error)
     }
 
-    /// 对 API Key 脱敏：保留前 4 位和后 3 位，中间用 *** 替代
+    /// Masks the API key: keeps first 4 and last 3 characters, middle replaced with ***.
     static func maskApiKey(_ key: String) -> String {
         if key.count <= 10 { return "***" }
         return "\(key.prefix(4))***\(key.suffix(3))"

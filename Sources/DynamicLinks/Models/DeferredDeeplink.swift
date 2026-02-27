@@ -2,60 +2,61 @@
 //  DeferredDeeplink.swift
 //  DynamicLinks
 //
-//  Deferred Deeplink 数据模型和工具类
+//  Deferred deeplink data model and helper utilities.
 //
 
 import UIKit
 import CommonCrypto
 
-/// Deferred Deeplink 数据
+/// Deferred deeplink data.
 ///
-/// 当用户通过 Deeplink 跳转到 App Store 下载 App，首次打开时可以获取原始链接数据
-/// @unchecked Sendable: all properties are `let` and contain only JSON-primitive values
+/// When a user is redirected to the App Store via a deeplink and installs
+/// the app, the original link data can be retrieved on first launch.
+/// @unchecked Sendable: all properties are `let` and contain only JSON-primitive values.
 @objc public class DeferredDeeplinkData: NSObject, @unchecked Sendable {
 
-    /// 是否找到延迟深链
+    /// Whether a deferred deeplink was found.
     @objc public let found: Bool
 
-    /// 原始链接数据
+    /// Original link data returned from the backend.
     @objc public let linkData: [String: Any]?
 
-    /// 获取原始 Deeplink ID
+    /// Returns the original deeplink ID.
     @objc public var deeplinkId: String? {
         return linkData?["deeplink_id"] as? String
     }
 
-    /// 获取 Project ID
+    /// Returns the project ID.
     @objc public var projectId: String? {
         return linkData?["project_id"] as? String
     }
 
-    /// 获取原始 URL
+    /// Returns the original URL.
     @objc public var originalUrl: String? {
         return linkData?["original_url"] as? String
     }
 
-    /// 获取 UTM Source
+    /// Returns the UTM source.
     @objc public var utmSource: String? {
         return linkData?["utm_source"] as? String
     }
 
-    /// 获取 UTM Medium
+    /// Returns the UTM medium.
     @objc public var utmMedium: String? {
         return linkData?["utm_medium"] as? String
     }
 
-    /// 获取 UTM Campaign
+    /// Returns the UTM campaign.
     @objc public var utmCampaign: String? {
         return linkData?["utm_campaign"] as? String
     }
 
-    /// 获取 Referer
+    /// Returns the referer.
     @objc public var referer: String? {
         return linkData?["referer"] as? String
     }
 
-    /// 获取自定义数据
+    /// Returns custom data by key.
     @objc public func getCustomData(key: String) -> Any? {
         return linkData?[key]
     }
@@ -67,52 +68,52 @@ import CommonCrypto
     }
 }
 
-/// 设备指纹生成器
+/// Device fingerprint generator.
 ///
-/// 用于生成设备唯一标识，匹配 Deferred Deeplink
+/// Used to generate a device identifier for matching deferred deeplinks.
 internal class DeviceFingerprint {
 
     private static let prefsKey = "grivn_deferred_deeplink"
     private static let keyFirstLaunchChecked = "first_launch_checked"
     private static let keyFingerprintId = "fingerprint_id"
 
-    /// 获取或生成设备指纹
+    /// Returns the stored device fingerprint or generates a new one.
     @MainActor
     static func getFingerprint() -> String {
-        // 优先使用缓存的指纹
+        // Prefer using the cached fingerprint if available.
         if let cached = UserDefaults.standard.string(forKey: "\(prefsKey).\(keyFingerprintId)") {
             return cached
         }
 
-        // 生成新指纹
+        // Generate a new fingerprint.
         let fingerprint = generateFingerprint()
         UserDefaults.standard.set(fingerprint, forKey: "\(prefsKey).\(keyFingerprintId)")
 
         return fingerprint
     }
 
-    /// 检查是否是首次启动（未检查过 Deferred Deeplink）
+    /// Checks whether this is the first launch (deferred deeplink not checked yet).
     static func isFirstLaunch() -> Bool {
         return !UserDefaults.standard.bool(forKey: "\(prefsKey).\(keyFirstLaunchChecked)")
     }
 
-    /// 标记已检查过首次启动
+    /// Marks that the first-launch check has been performed.
     static func markFirstLaunchChecked() {
         UserDefaults.standard.set(true, forKey: "\(prefsKey).\(keyFirstLaunchChecked)")
     }
 
-    /// 重置首次启动标记（用于测试）
+    /// Resets the first-launch flag (for testing).
     static func resetFirstLaunch() {
         UserDefaults.standard.removeObject(forKey: "\(prefsKey).\(keyFirstLaunchChecked)")
     }
 
-    /// 清除所有缓存数据（用于测试）
+    /// Clears all cached data (for testing).
     static func clearAll() {
         UserDefaults.standard.removeObject(forKey: "\(prefsKey).\(keyFirstLaunchChecked)")
         UserDefaults.standard.removeObject(forKey: "\(prefsKey).\(keyFingerprintId)")
     }
 
-    /// 生成设备指纹
+    /// Generates a device fingerprint.
     @MainActor
     private static func generateFingerprint() -> String {
         let components = [
@@ -126,7 +127,7 @@ internal class DeviceFingerprint {
         return sha256(data)
     }
 
-    /// 获取设备类型
+    /// Returns the device type.
     @MainActor
     private static func getDeviceType() -> String {
         switch UIDevice.current.userInterfaceIdiom {
@@ -139,7 +140,7 @@ internal class DeviceFingerprint {
         }
     }
 
-    /// 获取屏幕分辨率
+    /// Returns the screen resolution.
     @MainActor
     static func getScreenResolution() -> String {
         let screen = UIScreen.main
@@ -150,17 +151,17 @@ internal class DeviceFingerprint {
         return "\(width)x\(height)"
     }
 
-    /// 获取时区
+    /// Returns the current timezone identifier.
     static func getTimezone() -> String {
         return TimeZone.current.identifier
     }
 
-    /// 获取语言
+    /// Returns the current language code.
     static func getLanguage() -> String {
         return Locale.current.languageCode ?? "unknown"
     }
 
-    /// 获取 User-Agent
+    /// Returns a default User-Agent string.
     @MainActor
     static func getUserAgent() -> String {
         let device = UIDevice.current
@@ -172,7 +173,7 @@ internal class DeviceFingerprint {
         return "Mozilla/5.0 (\(model); CPU \(model) OS \(systemVersion) like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) \(appName)/\(appVersion)"
     }
 
-    /// SHA256 哈希
+    /// Computes a SHA256 hash.
     private static func sha256(_ string: String) -> String {
         guard let data = string.data(using: .utf8) else { return "" }
 

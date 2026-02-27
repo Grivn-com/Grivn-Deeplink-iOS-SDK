@@ -3,10 +3,10 @@ import Foundation
 @objc
 public final class DynamicLinkComponents: NSObject, @unchecked Sendable {
 
-    /// 目标深度链接 URL
+    /// Target deep link URL.
     public let link: URL
     
-    /// 短链接域名前缀
+    /// Short link domain URI prefix.
     public let domainUriPrefix: String
 
     public var iOSParameters: DynamicLinkIOSParameters = DynamicLinkIOSParameters()

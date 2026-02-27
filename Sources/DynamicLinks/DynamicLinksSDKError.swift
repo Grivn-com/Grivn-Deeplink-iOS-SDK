@@ -5,32 +5,32 @@
 
 import Foundation
 
-/// DynamicLinks SDK 错误类型
-/// 匹配 Android SDK 的错误定义
+/// DynamicLinks SDK error types.
+/// Mirrors the error definitions used in the Android SDK.
 public enum DynamicLinksSDKError: Error, LocalizedError {
     
-    /// SDK 未初始化
+    /// SDK has not been initialized.
     case notInitialized
     
-    /// 无效的动态链接
+    /// The dynamic link is invalid.
     case invalidDynamicLink
     
-    /// 项目 ID 未设置（创建链接时需要）
+    /// Project ID has not been set (required when creating links).
     case projectIdNotSet
     
-    /// 粘贴板中没有 URL
+    /// No URL was found in the pasteboard.
     case noURLInPasteboard
     
-    /// 已经检查过粘贴板
+    /// The pasteboard has already been checked.
     case alreadyCheckedPasteboard
     
-    /// 网络错误
+    /// Network error.
     case networkError(message: String, cause: Error?)
     
-    /// 服务器返回错误
+    /// Server returned an error.
     case serverError(message: String, code: Int)
     
-    /// 解析响应失败
+    /// Failed to parse the response.
     case parseError(message: String, cause: Error?)
     
     public var errorDescription: String? {
@@ -54,7 +54,7 @@ public enum DynamicLinksSDKError: Error, LocalizedError {
         }
     }
     
-    /// 转换为 NSError 以支持 Objective-C
+    /// Converts to `NSError` for Objective-C compatibility.
     public var nsError: NSError {
         let domain = "com.DynamicLinks"
         let code: Int
