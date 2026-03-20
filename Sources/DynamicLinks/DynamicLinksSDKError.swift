@@ -32,6 +32,9 @@ public enum DynamicLinksSDKError: Error, LocalizedError {
     
     /// Failed to parse the response.
     case parseError(message: String, cause: Error?)
+
+    /// The app version is too old; the user must update.
+    case appUpdateRequired(currentVersion: String, requiredVersion: String, appStoreId: String?)
     
     public var errorDescription: String? {
         switch self {
@@ -51,6 +54,8 @@ public enum DynamicLinksSDKError: Error, LocalizedError {
             return "Server error (\(code)): \(message)"
         case .parseError(let message, _):
             return "Parse error: \(message)"
+        case .appUpdateRequired(let currentVersion, let requiredVersion, _):
+            return "App update required: current version \(currentVersion) is below the minimum required version \(requiredVersion)"
         }
     }
     
@@ -91,6 +96,17 @@ public enum DynamicLinksSDKError: Error, LocalizedError {
                 NSLocalizedDescriptionKey: errorDescription ?? "",
                 NSUnderlyingErrorKey: cause as Any
             ]
+        case .appUpdateRequired(let currentVersion, let requiredVersion, let appStoreId):
+            code = 8
+            var info: [String: Any] = [
+                NSLocalizedDescriptionKey: errorDescription ?? "",
+                "currentVersion": currentVersion,
+                "requiredVersion": requiredVersion
+            ]
+            if let appStoreId = appStoreId {
+                info["appStoreId"] = appStoreId
+            }
+            userInfo = info
         }
         
         return NSError(domain: domain, code: code, userInfo: userInfo)

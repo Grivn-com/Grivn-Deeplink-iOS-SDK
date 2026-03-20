@@ -325,6 +325,19 @@ extension DynamicLinksSDK {
 
         SDKLogger.info("exchangeShortLink succeeded — longLink=\(longLink)")
 
+        // Check minimum app version
+        if let requiredVersion = dynamicLink.minimumAppVersion, !requiredVersion.isEmpty {
+            let currentVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0"
+            if currentVersion.compare(requiredVersion, options: .numeric) == .orderedAscending {
+                SDKLogger.warn("App version \(currentVersion) < required \(requiredVersion)")
+                throw DynamicLinksSDKError.appUpdateRequired(
+                    currentVersion: currentVersion,
+                    requiredVersion: requiredVersion,
+                    appStoreId: response.isi
+                )
+            }
+        }
+
         // Auto-event: deeplink_first_open or deeplink_reopen
         if DynamicLinksSDK.analyticsEnabled {
             let key = "grivn_deeplink_opened_\(incomingURL.absoluteString)"
