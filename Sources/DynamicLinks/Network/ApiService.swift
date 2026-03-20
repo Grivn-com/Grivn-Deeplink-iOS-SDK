@@ -22,11 +22,8 @@ internal struct DeeplinkCreateRequest: Encodable {
     let afl: String?
     let amv: String?
     // iOS Parameters
-    let ibi: String?
     let ifl: String?
-    let ius: String?
     let ipfl: String?
-    let ipbi: String?
     let isi: String?
     let imv: String?
     let efr: Bool?
@@ -250,11 +247,8 @@ internal final class ApiService: Sendable {
             afl: components.androidParameters?.fallbackURL?.absoluteString,
             amv: components.androidParameters?.minimumVersion != nil ? String(components.androidParameters!.minimumVersion) : nil,
             // iOS Parameters
-            ibi: nil,
             ifl: components.iOSParameters.fallbackURL?.absoluteString,
-            ius: nil,
             ipfl: components.iOSParameters.iPadFallbackURL?.absoluteString,
-            ipbi: nil,
             isi: components.iOSParameters.appStoreID,
             imv: components.iOSParameters.minimumAppVersion,
             efr: nil,
