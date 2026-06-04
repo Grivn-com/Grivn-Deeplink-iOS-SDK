@@ -307,7 +307,14 @@ extension DynamicLinksSDK {
         SDKLogger.debug("handleDynamicLink — url=\(incomingURL)")
 
         guard isValidDynamicLink(url: incomingURL) else {
-            SDKLogger.warn("Invalid dynamic link: \(incomingURL)")
+            // WF-2 #4: the usual cause is an empty allowedHosts list (the app
+            // never called configure(allowedHosts:)), which silently rejects
+            // every link. Make that actionable instead of a bare "invalid link".
+            if allowedHosts.isEmpty {
+                SDKLogger.warn("Link rejected: allowedHosts is empty — call DynamicLinksSDK.configure(allowedHosts:) with your project's short-link domain(s). url=\(incomingURL)")
+            } else {
+                SDKLogger.warn("Invalid dynamic link (host not in allowedHosts \(allowedHosts)): \(incomingURL)")
+            }
             throw DynamicLinksSDKError.invalidDynamicLink
         }
 

@@ -1,0 +1,12 @@
+{
+  "": {
+    "swift-dependencies": "/Users/pujunyang/go/src/Grivn-Deeplink-iOS-SDK/.build/index-build/arm64-apple-macosx/debug/DynamicLinksTests.build/master.swiftdeps"
+  },
+  "/Users/pujunyang/go/src/Grivn-Deeplink-iOS-SDK/Tests/DynamicLinksTests/DynamicLinksTests.swift": {
+    "dependencies": "/Users/pujunyang/go/src/Grivn-Deeplink-iOS-SDK/.build/index-build/arm64-apple-macosx/debug/DynamicLinksTests.build/DynamicLinksTests.d",
+    "object": "/Users/pujunyang/go/src/Grivn-Deeplink-iOS-SDK/.build/index-build/arm64-apple-macosx/debug/DynamicLinksTests.build/DynamicLinksTests.swift.o",
+    "swiftmodule": "/Users/pujunyang/go/src/Grivn-Deeplink-iOS-SDK/.build/index-build/arm64-apple-macosx/debug/DynamicLinksTests.build/DynamicLinksTests~partial.swiftmodule",
+    "swift-dependencies": "/Users/pujunyang/go/src/Grivn-Deeplink-iOS-SDK/.build/index-build/arm64-apple-macosx/debug/DynamicLinksTests.build/DynamicLinksTests.swiftdeps",
+    "diagnostics": "/Users/pujunyang/go/src/Grivn-Deeplink-iOS-SDK/.build/index-build/arm64-apple-macosx/debug/DynamicLinksTests.build/DynamicLinksTests.dia"
+  }
+}

@@ -10,7 +10,7 @@ Add the dependency to your `Package.swift`:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/your-org/DynamicLinks-iOS.git", from: "1.0.0")
+    .package(url: "https://github.com/Grivn-com/Grivn-Deeplink-iOS-SDK.git", from: "1.0.0")
 ]
 ```
 
@@ -45,6 +45,16 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 ```
 
 ### 2. Handle Dynamic Links
+
+> **Required for Universal Links to reach your app:** add an Associated Domains
+> entitlement `applinks:YOUR_PROJECT_ID.grivn.com` (Signing & Capabilities) and
+> set your iOS App ID in the Grivn dashboard. The backend auto-serves
+> `/.well-known/apple-app-site-association`. Without this, iOS never delivers the
+> link to the SDK. Full setup: `docs/sdk/ios-guide.md` (and the `app-ios` demo).
+>
+> **Deferred deep links on iOS** are resolved by **fingerprint matching** only —
+> there is no iOS equivalent of Android's Play Install Referrer, so
+> `match_tier` is always `"fingerprint"`.
 
 Handle incoming dynamic links in your SceneDelegate or AppDelegate:
 
@@ -229,6 +239,9 @@ do {
     case .parseError(let message, _):
         // Failed to parse server response
         print("Parse error: \(message)")
+    case .appUpdateRequired(let currentVersion, let requiredVersion, let appStoreId):
+        // The link requires a newer app version — prompt the user to update.
+        print("Update required: \(currentVersion) < \(requiredVersion), appStoreId=\(appStoreId ?? "n/a")")
     }
 }
 ```

@@ -1,0 +1,3 @@
+module DynamicLinksPackageTests {
+    header "/Users/pujunyang/go/src/Grivn-Deeplink-iOS-SDK/.build/index-build/arm64-apple-macosx/debug/DynamicLinksPackageTests.build/include/DynamicLinksPackageTests-Swift.h"
+}
