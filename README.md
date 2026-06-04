@@ -46,6 +46,16 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
 ### 2. Handle Dynamic Links
 
+> **Required for Universal Links to reach your app:** add an Associated Domains
+> entitlement `applinks:YOUR_PROJECT_ID.grivn.com` (Signing & Capabilities) and
+> set your iOS App ID in the Grivn dashboard. The backend auto-serves
+> `/.well-known/apple-app-site-association`. Without this, iOS never delivers the
+> link to the SDK. Full setup: `docs/sdk/ios-guide.md` (and the `app-ios` demo).
+>
+> **Deferred deep links on iOS** are resolved by **fingerprint matching** only —
+> there is no iOS equivalent of Android's Play Install Referrer, so
+> `match_tier` is always `"fingerprint"`.
+
 Handle incoming dynamic links in your SceneDelegate or AppDelegate:
 
 ```swift
