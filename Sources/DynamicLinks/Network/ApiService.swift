@@ -64,6 +64,9 @@ internal struct DeferredDeeplinkRequest: Encodable {
 internal struct DeferredDeeplinkResponse: Decodable {
     let found: Bool
     let link_data: [String: AnyCodable]?
+    // WF-2 #20: which matcher produced the result ("fingerprint" on iOS; Android
+    // may also report "install_referrer"). Optional — older backends omit it.
+    let match_tier: String?
 }
 
 /// Request payload for batching analytics events.
@@ -357,8 +360,11 @@ internal final class ApiService: Sendable {
         SDKLogger.debug("← \(httpResponse.statusCode) (\(data.count) bytes)")
 
         guard httpResponse.statusCode >= 200 && httpResponse.statusCode < 300 else {
+            // Preserve the HTTP status so callers can distinguish auth (401/403)
+            // and validation (4xx) from a transport blip (WF-2 #8). networkError
+            // is reserved for actual I/O failures (caught elsewhere).
             SDKLogger.error("HTTP error \(httpResponse.statusCode)")
-            throw DynamicLinksSDKError.networkError(message: "Server error: \(httpResponse.statusCode)", cause: nil)
+            throw DynamicLinksSDKError.serverError(message: "HTTP \(httpResponse.statusCode)", code: httpResponse.statusCode)
         }
 
         guard !data.isEmpty else {

@@ -10,7 +10,7 @@ Add the dependency to your `Package.swift`:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/your-org/DynamicLinks-iOS.git", from: "1.0.0")
+    .package(url: "https://github.com/Grivn-com/Grivn-Deeplink-iOS-SDK.git", from: "1.0.0")
 ]
 ```
 
@@ -229,6 +229,9 @@ do {
     case .parseError(let message, _):
         // Failed to parse server response
         print("Parse error: \(message)")
+    case .appUpdateRequired(let currentVersion, let requiredVersion, let appStoreId):
+        // The link requires a newer app version — prompt the user to update.
+        print("Update required: \(currentVersion) < \(requiredVersion), appStoreId=\(appStoreId ?? "n/a")")
     }
 }
 ```

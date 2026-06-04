@@ -82,7 +82,10 @@ internal final class SDKLogger: Sendable {
 
     // Thread safety: all access goes through `lock` via computed properties
     private let lock = UnfairLock()
-    nonisolated(unsafe) private var _logLevel: LogLevel = .none
+    // Default .warn so SDK warnings/errors (failed deferred-deeplink checks,
+    // empty allowedHosts, server errors) are visible without opt-in (WF-2 #17).
+    // Apps can silence via setLogLevel(.none) or raise detail via setDebugMode(true).
+    nonisolated(unsafe) private var _logLevel: LogLevel = .warn
     nonisolated(unsafe) private var _handler: DynamicLinksLogHandler = DefaultLogHandler()
 
     var logLevel: LogLevel {
