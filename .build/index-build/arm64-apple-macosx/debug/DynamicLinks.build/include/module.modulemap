@@ -1,3 +1,0 @@
-module DynamicLinks {
-    header "/Users/pujunyang/go/src/Grivn-Deeplink-iOS-SDK/.build/index-build/arm64-apple-macosx/debug/DynamicLinks.build/include/DynamicLinks-Swift.h"
-}
