@@ -227,11 +227,18 @@ internal final class ApiService: Sendable {
         configuration.timeoutIntervalForRequest = timeout
         configuration.timeoutIntervalForResource = timeout
 
+        #if DEBUG
         if trustAllCerts {
             self.session = URLSession(configuration: configuration, delegate: TrustAllCertsDelegate(), delegateQueue: nil)
         } else {
             self.session = URLSession(configuration: configuration)
         }
+        #else
+        // Release builds never install the cert-trusting delegate, regardless of
+        // the flag, so a shipped app always validates TLS.
+        _ = trustAllCerts
+        self.session = URLSession(configuration: configuration)
+        #endif
     }
     
     /// Creates a short link from the given components.
@@ -394,7 +401,9 @@ internal final class ApiService: Sendable {
     }
 }
 
-/// Delegate that trusts all certificates (development only).
+#if DEBUG
+/// Delegate that trusts all certificates (development only). Compiled into DEBUG
+/// builds only — it does not exist in a release binary.
 /// @unchecked Sendable: stateless delegate, safe to share across threads.
 private final class TrustAllCertsDelegate: NSObject, URLSessionDelegate, @unchecked Sendable {
     func urlSession(
@@ -410,4 +419,5 @@ private final class TrustAllCertsDelegate: NSObject, URLSessionDelegate, @unchec
         }
     }
 }
+#endif
 
