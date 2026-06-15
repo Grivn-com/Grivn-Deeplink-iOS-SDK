@@ -108,11 +108,21 @@ public final class DynamicLinksSDK: NSObject, @unchecked Sendable {
 
     /// Controls whether to trust all SSL certificates (development only).
     /// Must be called before `initialize()`.
+    ///
+    /// SECURITY: this disables TLS certificate validation. It is compiled in only
+    /// for DEBUG builds; in a release build the call is a no-op and TLS validation
+    /// stays on, so it can never weaken a shipped app.
     @discardableResult
     @objc public static func setTrustAllCerts(_ enabled: Bool) -> DynamicLinksSDK.Type {
+        #if DEBUG
         lock.withLock {
             _trustAllCerts = enabled
         }
+        #else
+        if enabled {
+            SDKLogger.warn("setTrustAllCerts(true) ignored in release build (TLS validation stays ON)")
+        }
+        #endif
         return self
     }
 
