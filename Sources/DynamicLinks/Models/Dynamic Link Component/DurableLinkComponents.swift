@@ -13,6 +13,8 @@ public final class DynamicLinkComponents: NSObject, @unchecked Sendable {
     public var androidParameters: DynamicLinkAndroidParameters?
     public var iTunesConnectParameters: DynamicLinkItunesConnectAnalyticsParameters?
     public var socialMetaTagParameters: DynamicLinkSocialMetaTagParameters?
+    /// Link options (path mode, GRIVN-2). `nil` => backend default (UNGUESSABLE).
+    public var options: DynamicLinkOptionsParameters?
     public var otherPlatformParameters: DynamicLinkOtherPlatformParameters?
     public var analyticsParameters: DynamicLinkAnalyticsParameters?
 
@@ -23,6 +25,7 @@ public final class DynamicLinkComponents: NSObject, @unchecked Sendable {
         androidParameters: DynamicLinkAndroidParameters? = nil,
         iTunesConnectParameters: DynamicLinkItunesConnectAnalyticsParameters? = nil,
         socialMetaTagParameters: DynamicLinkSocialMetaTagParameters? = nil,
+        options: DynamicLinkOptionsParameters? = nil,
         otherPlatformParameters: DynamicLinkOtherPlatformParameters? = nil,
         analyticsParameters: DynamicLinkAnalyticsParameters? = nil
     ) {
@@ -42,6 +45,7 @@ public final class DynamicLinkComponents: NSObject, @unchecked Sendable {
         self.androidParameters = androidParameters
         self.iTunesConnectParameters = iTunesConnectParameters
         self.socialMetaTagParameters = socialMetaTagParameters
+        self.options = options
         self.otherPlatformParameters = otherPlatformParameters
         self.analyticsParameters = analyticsParameters
     }

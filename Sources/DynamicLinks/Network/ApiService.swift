@@ -44,6 +44,8 @@ internal struct DeeplinkCreateRequest: Encodable {
     let ct: String?
     let mt: String?
     let pt: String?
+    // Path mode (GRIVN-2): "SHORT" | "UNGUESSABLE"; nil => backend default
+    let pathMode: String?
 }
 
 /// Request payload for resolving a short link.
@@ -278,7 +280,9 @@ internal final class ApiService: Sendable {
             at: components.iTunesConnectParameters?.affiliateToken,
             ct: components.iTunesConnectParameters?.campaignToken,
             mt: nil,
-            pt: components.iTunesConnectParameters?.providerToken
+            pt: components.iTunesConnectParameters?.providerToken,
+            // Path mode (GRIVN-2): nil => backend default (UNGUESSABLE)
+            pathMode: components.options?.pathLength.pathMode
         )
         
         return try await post(url: url, body: body)
