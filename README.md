@@ -141,15 +141,15 @@ Task {
                 fallbackURL: URL(string: "https://play.google.com/store/apps/details?id=com.myapp.android"),
                 minimumVersion: 10
             ),
-            analyticsParameters: DynamicLinkAnalyticsParameters(
-                source: "email",
-                medium: "newsletter",
-                campaign: "summer_sale"
-            ),
             socialMetaTagParameters: DynamicLinkSocialMetaTagParameters(
                 title: "Check out this product!",
                 descriptionText: "Amazing product on sale",
                 imageURL: URL(string: "https://myapp.com/product/123/image.jpg")
+            ),
+            analyticsParameters: DynamicLinkAnalyticsParameters(
+                source: "email",
+                medium: "newsletter",
+                campaign: "summer_sale"
             )
         ) else {
             print("Failed to create components")
