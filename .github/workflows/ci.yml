@@ -1,0 +1,29 @@
+name: CI
+
+# Build + smoke-test gate. Runs on every push/PR to main and on tag pushes so a
+# release tag is only ever cut on a green commit.
+#
+# The package imports UIKit/CommonCrypto unconditionally, so `swift test` cannot
+# compile on Linux or native macOS — tests build+run on an iOS Simulator via
+# xcodebuild on a macOS runner (Xcode 16 for swift-tools 6.0 + swift-testing).
+on:
+  push:
+    branches: [main]
+    tags: ['*']
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-test:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Xcode version
+        run: xcodebuild -version
+
+      - name: Build + smoke tests
+        run: |
+          xcodebuild test \
+            -scheme DynamicLinks \
+            -destination 'platform=iOS Simulator,name=iPhone 16,OS=latest'
