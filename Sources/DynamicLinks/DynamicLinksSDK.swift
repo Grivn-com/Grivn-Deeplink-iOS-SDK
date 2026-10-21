@@ -34,8 +34,10 @@
 @objc
 public final class DynamicLinksSDK: NSObject, @unchecked Sendable {
 
-    /// SDK version.
-    @objc public static let sdkVersion: String = "1.0.9"
+    /// SDK version, sent to the backend as `sdk_version` with every event.
+    /// SwiftPM has no build-time access to the release tag, so bump this by
+    /// hand to match the tag before each release.
+    @objc public static let sdkVersion: String = "1.3.1"
     
     // MARK: - Singleton & thread safety
 
