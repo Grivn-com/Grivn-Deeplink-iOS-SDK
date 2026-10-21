@@ -54,11 +54,9 @@ internal struct ExchangeShortLinkRequest: Encodable {
 }
 
 /// Request payload for retrieving a deferred deeplink.
-/// Note: `fingerprint_id` is not sent; the server generates it from IP + User-Agent.
+/// The server combines these with the request IP to find a recent click.
 internal struct DeferredDeeplinkRequest: Encodable {
     let user_agent: String
-    let screen_resolution: String?
-    let timezone: String?
     let language: String?
 }
 
@@ -298,19 +296,16 @@ internal final class ApiService: Sendable {
     }
     
     /// Retrieves a deferred deeplink.
-    /// The server performs fingerprint matching based on IP + User-Agent.
+    /// The server matches the request IP, device type, OS and language against
+    /// recent clicks on the customer's links.
     func getDeferredDeeplink(
         userAgent: String,
-        screenResolution: String?,
-        timezone: String?,
         language: String?
     ) async throws -> DeferredDeeplinkResponse {
         let url = URL(string: "\(baseUrl)/api/v1/analytics/deferred")!
         
         let body = DeferredDeeplinkRequest(
             user_agent: userAgent,
-            screen_resolution: screenResolution,
-            timezone: timezone,
             language: language
         )
         

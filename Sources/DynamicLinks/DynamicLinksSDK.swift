@@ -34,8 +34,10 @@
 @objc
 public final class DynamicLinksSDK: NSObject, @unchecked Sendable {
 
-    /// SDK version.
-    @objc public static let sdkVersion: String = "1.0.9"
+    /// SDK version, sent to the backend as `sdk_version` with every event.
+    /// SwiftPM has no build-time access to the release tag, so bump this by
+    /// hand to match the tag before each release.
+    @objc public static let sdkVersion: String = "1.3.1"
     
     // MARK: - Singleton & thread safety
 
@@ -254,6 +256,7 @@ public final class DynamicLinksSDK: NSObject, @unchecked Sendable {
             }
 
             SDKLogger.info("SDK initialized — baseUrl=\(instance.baseUrl), projectId=\(projectId ?? "(none)"), analyticsEnabled=\(_analyticsEnabled)")
+            DeferredLinkContext.removeLegacyData()
 
             // Automatically check deferred deeplink
             Task {
@@ -582,33 +585,29 @@ extension DynamicLinksSDK {
         }
 
         // Check whether this is the first launch
-        if !forceCheck && !DeviceFingerprint.isFirstLaunch() {
+        if !forceCheck && !DeferredLinkContext.isFirstLaunch() {
             return DeferredDeeplinkData(found: false, linkData: nil)
         }
 
         SDKLogger.info("Checking deferred deeplink (forceCheck=\(forceCheck))")
 
         // Mark that the first-launch check has been performed
-        DeviceFingerprint.markFirstLaunchChecked()
+        DeferredLinkContext.markFirstLaunchChecked()
 
         do {
-            // The server performs fingerprint matching based on IP + User-Agent.
-            let userAgent = await DeviceFingerprint.getUserAgent()
-            let screenResolution = await DeviceFingerprint.getScreenResolution()
-            let timezone = DeviceFingerprint.getTimezone()
-            let language = DeviceFingerprint.getLanguage()
+            // The server matches IP, device type, OS and language against recent clicks.
+            let userAgent = await DeferredLinkContext.getUserAgent()
+            let language = DeferredLinkContext.getLanguage()
 
-            SDKLogger.debug("Fingerprint matching — screen=\(screenResolution), tz=\(timezone), lang=\(language)")
+            SDKLogger.debug("Looking up deferred deeplink — lang=\(language)")
 
             let response = try await apiService.getDeferredDeeplink(
                 userAgent: userAgent,
-                screenResolution: screenResolution,
-                timezone: timezone,
                 language: language
             )
 
             if response.found {
-                SDKLogger.info("Deferred deeplink found via fingerprint")
+                SDKLogger.info("Deferred deeplink matched on network and device signals")
                 trackEvent(name: "deferred_deeplink_match", params: ["match_tier": "fingerprint"])
                 try? await confirmInstallInternal()
             } else {
@@ -665,7 +664,7 @@ extension DynamicLinksSDK {
         guard let apiService = apiService else { return }
 
         // UIDevice properties are @MainActor in Swift 6
-        let userAgent = await DeviceFingerprint.getUserAgent()
+        let userAgent = await DeferredLinkContext.getUserAgent()
         let deviceModel = await MainActor.run { UIDevice.current.model }
         let osVersion = await MainActor.run { UIDevice.current.systemVersion }
         let appVersion = await MainActor.run { Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String }
@@ -685,7 +684,7 @@ extension DynamicLinksSDK {
     /// Resets the first-launch state (for testing).
     @objc
     public func resetDeferredDeeplinkState() {
-        DeviceFingerprint.resetFirstLaunch()
+        DeferredLinkContext.resetFirstLaunch()
     }
 }
 

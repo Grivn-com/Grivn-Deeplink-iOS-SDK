@@ -52,9 +52,10 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 > `/.well-known/apple-app-site-association`. Without this, iOS never delivers the
 > link to the SDK. Full setup: `docs/sdk/ios-guide.md` (and the `app-ios` demo).
 >
-> **Deferred deep links on iOS** are resolved by **fingerprint matching** only —
-> there is no iOS equivalent of Android's Play Install Referrer, so
-> `match_tier` is always `"fingerprint"`.
+> **Deferred deep links on iOS** are resolved by probabilistic matching on
+> network and device signals: there is no iOS equivalent of Android's Play
+> Install Referrer, so `match_tier` is always `"fingerprint"`. Read
+> [Privacy & App Review](#privacy--app-review) before you ship.
 
 Handle incoming dynamic links in your SceneDelegate or AppDelegate:
 
@@ -167,6 +168,73 @@ Task {
     }
 }
 ```
+
+## Privacy & App Review
+
+### How iOS deferred deep links are matched
+
+When someone opens a Grivn link before installing your app, Grivn records the
+click. On first launch the SDK asks Grivn for a recent matching click. The match
+uses the request IP address (exact, or the same /24 range), the device type
+(phone or tablet), the OS, and the device language, within 48 hours. The SDK
+itself computes no device identifier.
+
+This is probabilistic. On a shared network (an office, a campus) it can pick up
+a click made on another device, so treat a match as a hint: don't grant
+referral rewards or link accounts on a match alone.
+
+### Apple's rules
+
+Apple's Developer Program License Agreement (§3.3.3) and its
+[User Privacy and Data Use](https://developer.apple.com/app-store/user-privacy-and-data-use/)
+page prohibit deriving data from a device to uniquely identify it
+("fingerprinting"), and App Tracking Transparency permission does not make it
+allowed. App Review has rejected apps for SDKs that match users with
+probabilistic methods. Grivn uses coarse signals and short-lived records, but
+whether that is acceptable for your app is your call.
+
+If you'd rather not use probabilistic matching, turn it off before
+initializing the SDK:
+
+```swift
+DynamicLinksSDK.setAnalyticsEnabled(false)
+DynamicLinksSDK.initialize(baseUrl: "https://www.grivn.com", secretKey: "YOUR_GRIVN_API_KEY", projectId: "YOUR_PROJECT_ID")
+```
+
+With analytics off, the SDK makes no deferred lookup, sends no install
+confirmation and no events. Universal Links still open your app, and the
+pasteboard flow (step 3 above) still works; it needs a user tap and shows the
+iOS paste prompt, but involves no matching.
+
+### What the SDK sends
+
+| When | Data |
+|---|---|
+| First launch (deferred lookup) | A User-Agent built from the device model, iOS version, app name and version; the device language. Grivn also sees the request IP. |
+| After a match (install confirmation) | Device model, iOS version, app version |
+| Events (batched) | `identifierForVendor`, iOS version, app version, SDK version; per event the name, parameters (for deep link opens, the link URL), time, and the user ID if you call `setUserId` |
+| Never | IDFA, App Tracking Transparency, keychain, contacts, location |
+
+Retention is described in Grivn's [privacy policy](https://www.grivn.com/privacy).
+
+### Privacy manifest
+
+The package ships a `PrivacyInfo.xcprivacy`, which Xcode merges into your
+app's privacy report. It declares no tracking; Device ID, Product Interaction,
+and User ID (only when you call `setUserId`) collected for analytics; and
+UserDefaults access with reason `CA92.1`.
+
+### App Store privacy labels
+
+A starting point. You are responsible for your app's labels.
+
+| If your app… | Declare | Purpose | Linked to user | Tracking |
+|---|---|---|---|---|
+| Uses the SDK with defaults | Identifiers → Device ID | Analytics, App Functionality | No | No |
+| Uses the SDK with defaults | Usage Data → Product Interaction | Analytics | No | No |
+| Calls `setUserId` | Identifiers → User ID; set the rows above to linked | Analytics | Yes | No |
+| Uses Grivn campaign attribution to measure paid ads | The rows above, marked as used for tracking; request ATT permission first | Third-Party Advertising | Depends on your setup | Yes |
+| Calls `setAnalyticsEnabled(false)` | Nothing from this SDK | — | — | — |
 
 ## API Reference
 
