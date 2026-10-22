@@ -111,17 +111,15 @@ DynamicLinksSDK.initialize(
 }
 ```
 
-To check yourself instead, call `checkDeferredDeeplink()` after `initialize`.
-It returns `found == false` on every launch after the first; pass
-`forceCheck: true` only while testing.
+`initialize` always runs this check on first launch, with or without a
+callback, so the callback is how you receive the result. Calling
+`checkDeferredDeeplink()` yourself afterwards returns `found == false`, because
+the first launch has already been checked. To repeat the lookup while testing,
+force it:
 
 ```swift
-Task {
-    let result = try await DynamicLinksSDK.shared.checkDeferredDeeplink()
-    if result.found {
-        // result.originalUrl, result.deeplinkId, result.utmSource, ...
-    }
-}
+// Testing only: repeat the lookup on a later launch
+let result = try await DynamicLinksSDK.shared.checkDeferredDeeplink(forceCheck: true)
 ```
 
 With analytics turned off (`DynamicLinksSDK.setAnalyticsEnabled(false)`), the
@@ -280,7 +278,7 @@ A starting point. You are responsible for your app's labels.
 |--------|-------------|
 | `initialize(baseUrl:secretKey:projectId:)` | Initialize the SDK with backend credentials |
 | `initialize(baseUrl:secretKey:projectId:onDeferredDeeplink:)` | Initialize and get the deferred deep link (if any) on first launch |
-| `checkDeferredDeeplink(forceCheck:)` | Look up the deferred deep link yourself; returns `DeferredDeeplinkData` |
+| `checkDeferredDeeplink(forceCheck:)` | Repeat the deferred lookup (testing); `initialize` already checks on first launch |
 | `configure(allowedHosts:)` | Set allowed hosts for link validation |
 | `setTrustAllCerts(_:)` | Trust all SSL certificates (dev only) |
 | `handleDynamicLink(_:)` | Parse a dynamic link and return `DynamicLink` |
