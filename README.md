@@ -208,10 +208,11 @@ Task {
 ### How iOS deferred deep links are matched
 
 When someone opens a Grivn link before installing your app, Grivn records the
-click. On first launch the SDK asks Grivn for a recent matching click. The match
-uses the request IP address (exact, or the same /24 range), the device type
-(phone or tablet), the OS, and the device language, within 48 hours. The SDK
-itself computes no device identifier.
+click. On first launch the SDK asks Grivn for a recent matching click, by the
+device type (phone or tablet) and OS plus either the exact request IP address
+within 48 hours, or the same /24 range and the device language within 2 hours.
+Without a network match there is no match. The SDK itself computes no device
+identifier.
 
 This is probabilistic. On a shared network (an office, a campus) it can pick up
 a click made on another device, so treat a match as a hint: don't grant
