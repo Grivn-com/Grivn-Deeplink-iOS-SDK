@@ -37,7 +37,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         )
         
         // Configure allowed hosts for link validation
-        DynamicLinksSDK.configure(allowedHosts: ["acme.wayp.link", "preview.acme.wayp.link"])
+        DynamicLinksSDK.configure(allowedHosts: ["YOUR_PROJECT_ID.grivn.com"])
         
         return true
     }
@@ -50,7 +50,8 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 > entitlement `applinks:YOUR_PROJECT_ID.grivn.com` (Signing & Capabilities) and
 > set your iOS App ID in the Grivn dashboard. The backend auto-serves
 > `/.well-known/apple-app-site-association`. Without this, iOS never delivers the
-> link to the SDK. Full setup: `docs/sdk/ios-guide.md` (and the `app-ios` demo).
+> link to the SDK. Full setup with copy-paste examples: **Developer Tools → SDK
+> Docs** in your Grivn dashboard.
 >
 > **Deferred deep links on iOS** are resolved by probabilistic matching on
 > network and device signals: there is no iOS equivalent of Android's Play
@@ -91,7 +92,42 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 }
 ```
 
-### 3. Handle Pasteboard Dynamic Links
+### 3. Handle Deferred Deep Links
+
+When someone taps your link before the app is installed, the SDK can hand you
+that link on the first launch after install. Pass `onDeferredDeeplink` to
+`initialize`: the SDK checks once, on first launch, and calls you back on the
+main thread.
+
+```swift
+DynamicLinksSDK.initialize(
+    baseUrl: "https://api.grivn.com",
+    secretKey: "your_secret_key",
+    projectId: "your_project_id"
+) { result in
+    guard result.found, let url = result.originalUrl else { return }
+    // Route to the content the user tapped, e.g. handleDeepLink(URL(string: url))
+    print("Deferred deep link: \(url), utm_source: \(result.utmSource ?? "none")")
+}
+```
+
+To check yourself instead, call `checkDeferredDeeplink()` after `initialize`.
+It returns `found == false` on every launch after the first; pass
+`forceCheck: true` only while testing.
+
+```swift
+Task {
+    let result = try await DynamicLinksSDK.shared.checkDeferredDeeplink()
+    if result.found {
+        // result.originalUrl, result.deeplinkId, result.utmSource, ...
+    }
+}
+```
+
+With analytics turned off (`DynamicLinksSDK.setAnalyticsEnabled(false)`), the
+SDK makes no deferred lookup and `found` is always `false`.
+
+### 4. Handle Pasteboard Dynamic Links
 
 On iOS 16+, reading pasteboard content triggers a system permission banner.
 Use `hasPossibleDynamicLink()` (no prompt) to check first, then read only on user action.
@@ -121,7 +157,7 @@ do {
 > **Important**: Do NOT call `handlePasteboardDynamicLink()` automatically
 > (e.g. in `sceneDidBecomeActive`). This triggers the system paste prompt every time.
 
-### 4. Create (Shorten) Dynamic Links
+### 5. Create (Shorten) Dynamic Links
 
 Create a short dynamic link from components:
 
@@ -132,7 +168,7 @@ Task {
     do {
         guard let components = DynamicLinkComponents(
             link: URL(string: "https://myapp.com/product/123")!,
-            domainURIPrefix: "https://acme.wayp.link",
+            domainURIPrefix: "https://YOUR_PROJECT_ID.grivn.com",
             iOSParameters: DynamicLinkIOSParameters(
                 appStoreID: "123456789",
                 fallbackURL: URL(string: "https://apps.apple.com/app/id123456789")
@@ -198,7 +234,7 @@ initializing the SDK:
 
 ```swift
 DynamicLinksSDK.setAnalyticsEnabled(false)
-DynamicLinksSDK.initialize(baseUrl: "https://www.grivn.com", secretKey: "YOUR_GRIVN_API_KEY", projectId: "YOUR_PROJECT_ID")
+DynamicLinksSDK.initialize(baseUrl: "https://api.grivn.com", secretKey: "YOUR_GRIVN_API_KEY", projectId: "YOUR_PROJECT_ID")
 ```
 
 With analytics off, the SDK makes no deferred lookup, sends no install
@@ -243,6 +279,8 @@ A starting point. You are responsible for your app's labels.
 | Method | Description |
 |--------|-------------|
 | `initialize(baseUrl:secretKey:projectId:)` | Initialize the SDK with backend credentials |
+| `initialize(baseUrl:secretKey:projectId:onDeferredDeeplink:)` | Initialize and get the deferred deep link (if any) on first launch |
+| `checkDeferredDeeplink(forceCheck:)` | Look up the deferred deep link yourself; returns `DeferredDeeplinkData` |
 | `configure(allowedHosts:)` | Set allowed hosts for link validation |
 | `setTrustAllCerts(_:)` | Trust all SSL certificates (dev only) |
 | `handleDynamicLink(_:)` | Parse a dynamic link and return `DynamicLink` |
@@ -341,7 +379,7 @@ The SDK is fully compatible with Objective-C:
                              secretKey:@"your_secret_key"
                              projectId:@"your_project_id"];
 
-[DynamicLinksSDK configureWithAllowedHosts:@[@"acme.wayp.link"]];
+[DynamicLinksSDK configureWithAllowedHosts:@[@"YOUR_PROJECT_ID.grivn.com"]];
 
 // Handle dynamic link
 [[DynamicLinksSDK shared] handleDynamicLink:incomingURL 
