@@ -6,7 +6,9 @@ public final class DynamicLinkAndroidParameters: NSObject, @unchecked Sendable, 
     /// The Android app's package name.
     public let packageName: String
 
-    /// The link to open when the app isn't installed.
+    /// A web page to open instead of Google Play when the app isn't installed.
+    /// Users sent there get no deferred deep link; leave nil to send them to
+    /// Google Play.
     public var fallbackURL: URL?
 
     /// The version code of the minimum version of the app that can open the link.

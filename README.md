@@ -159,6 +159,11 @@ do {
 
 Create a short dynamic link from components:
 
+> **Fallback URLs**: leave `fallbackURL` and `iPadFallbackURL` unset unless you
+> want users without the app to see a web page. Unset, they go to the App Store
+> (or Google Play on Android) and the app gets this link on first launch
+> (deferred deep link). Users sent to a web page get no deferred deep link.
+
 ```swift
 import DynamicLinks
 
@@ -168,12 +173,10 @@ Task {
             link: URL(string: "https://myapp.com/product/123")!,
             domainURIPrefix: "https://YOUR_PROJECT_ID.grivn.com",
             iOSParameters: DynamicLinkIOSParameters(
-                appStoreID: "123456789",
-                fallbackURL: URL(string: "https://apps.apple.com/app/id123456789")
+                appStoreID: "123456789"
             ),
             androidParameters: DynamicLinkAndroidParameters(
                 packageName: "com.myapp.android",
-                fallbackURL: URL(string: "https://play.google.com/store/apps/details?id=com.myapp.android"),
                 minimumVersion: 10
             ),
             socialMetaTagParameters: DynamicLinkSocialMetaTagParameters(

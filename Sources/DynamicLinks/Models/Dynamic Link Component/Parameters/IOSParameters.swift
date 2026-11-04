@@ -6,10 +6,12 @@ public final class DynamicLinkIOSParameters: NSObject, @unchecked Sendable, Coda
     /// The App Store ID of the iOS app in App Store.
     @objc public var appStoreID: String?
 
-    /// The link to open when the app isn't installed.
+    /// A web page to open instead of the App Store when the app isn't installed.
+    /// Users sent there get no deferred deep link; leave nil to send them to the
+    /// App Store.
     @objc public var fallbackURL: URL?
 
-    /// The link to open on iPads when the app isn't installed.
+    /// Like `fallbackURL`, for iPads.
     @objc public var iPadFallbackURL: URL?
 
     /// The minimum version of your app that can open the link.
