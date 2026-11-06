@@ -241,8 +241,7 @@ DynamicLinksSDK.setAnalyticsEnabled(false)
 DynamicLinksSDK.initialize(baseUrl: "https://api.grivn.com", secretKey: "grivn_pk_your_key", projectId: "YOUR_PROJECT_ID")
 ```
 
-With analytics off, the SDK makes no deferred lookup, sends no install
-confirmation and no events. Universal Links still open your app, and the
+With analytics off, the SDK makes no deferred lookup and sends no events. Universal Links still open your app, and the
 pasteboard flow (step 3 above) still works; it needs a user tap and shows the
 iOS paste prompt, but involves no matching.
 
@@ -250,8 +249,7 @@ iOS paste prompt, but involves no matching.
 
 | When | Data |
 |---|---|
-| First launch (deferred lookup) | A User-Agent built from the device model, iOS version, app name and version; the device language. Grivn also sees the request IP. |
-| After a match (install confirmation) | Device model, iOS version, app version |
+| First launch (deferred lookup) | A User-Agent built from the device model, iOS version, app name and version; the device language. Grivn also sees the request IP. On a match, Grivn records the install on the matched click; since 1.4.0 the SDK sends no separate install confirmation. |
 | Events (batched) | `identifierForVendor`, iOS version, app version, SDK version; per event the name, parameters (for deep link opens, the link URL), time, and the user ID if you call `setUserId` |
 | Never | IDFA, App Tracking Transparency, keychain, contacts, location |
 
