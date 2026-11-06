@@ -32,7 +32,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         // Initialize SDK
         DynamicLinksSDK.initialize(
             baseUrl: "https://api.grivn.com",    // Backend API URL
-            secretKey: "your_secret_key",         // X-API-Key for authentication
+            secretKey: "grivn_pk_your_key",       // Publishable key (see below)
             projectId: "your_project_id"          // Project ID for creating links
         )
         
@@ -43,6 +43,8 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     }
 }
 ```
+
+**Which key:** pass a **publishable** key (starts with `grivn_pk_`; Grivn dashboard → Settings → API Keys → Publishable). It ships inside your app, so treat it as public: it can only resolve and create links and report installs and events. Never put a **secret** key (`grivn_sk_`) in an app: anyone can extract it, and the SDK endpoints reject it. The parameter is still named `secretKey` for compatibility.
 
 ### 2. Handle Dynamic Links
 
@@ -102,7 +104,7 @@ main thread.
 ```swift
 DynamicLinksSDK.initialize(
     baseUrl: "https://api.grivn.com",
-    secretKey: "your_secret_key",
+    secretKey: "grivn_pk_your_key",
     projectId: "your_project_id"
 ) { result in
     guard result.found, let url = result.originalUrl else { return }
@@ -236,7 +238,7 @@ initializing the SDK:
 
 ```swift
 DynamicLinksSDK.setAnalyticsEnabled(false)
-DynamicLinksSDK.initialize(baseUrl: "https://api.grivn.com", secretKey: "YOUR_GRIVN_API_KEY", projectId: "YOUR_PROJECT_ID")
+DynamicLinksSDK.initialize(baseUrl: "https://api.grivn.com", secretKey: "grivn_pk_your_key", projectId: "YOUR_PROJECT_ID")
 ```
 
 With analytics off, the SDK makes no deferred lookup, sends no install
@@ -364,7 +366,7 @@ DynamicLinksSDK
     .setTrustAllCerts(true)  // ⚠️ Only for development!
     .initialize(
         baseUrl: "https://localhost:8080",
-        secretKey: "dev_secret_key",
+        secretKey: "grivn_pk_your_dev_key",
         projectId: "test_project"
     )
 ```
@@ -378,7 +380,7 @@ The SDK is fully compatible with Objective-C:
 
 // Initialize
 [DynamicLinksSDK initializeWithBaseUrl:@"https://api.grivn.com"
-                             secretKey:@"your_secret_key"
+                             secretKey:@"grivn_pk_your_key"
                              projectId:@"your_project_id"];
 
 [DynamicLinksSDK configureWithAllowedHosts:@[@"YOUR_PROJECT_ID.grivn.com"]];
