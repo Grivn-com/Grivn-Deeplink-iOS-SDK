@@ -9,13 +9,13 @@
 //  // Initialize (only handling links)
 //  DynamicLinksSDK.initialize(
 //      baseUrl: "https://api.grivn.com",
-//      secretKey: "your_secret_key"
+//      secretKey: "grivn_pk_your_key"
 //  )
 //
 //  // Initialize (also creating links, requires projectId)
 //  DynamicLinksSDK.initialize(
 //      baseUrl: "https://api.grivn.com",
-//      secretKey: "your_secret_key",
+//      secretKey: "grivn_pk_your_key",
 //      projectId: "your_project_id"
 //  )
 //
@@ -155,7 +155,9 @@ public final class DynamicLinksSDK: NSObject, @unchecked Sendable {
     ///
     /// - Parameters:
     ///   - baseUrl: Backend API base URL (e.g. `"https://api.grivn.com"`).
-    ///   - secretKey: Secret key (sent via the `X-API-Key` header).
+    ///   - secretKey: Your publishable key (`grivn_pk_…`), sent as the `X-API-Key` header.
+    ///     It ships inside the app, so never pass a secret key (`grivn_sk_…`); the SDK
+    ///     endpoints reject those.
     ///   - projectId: Optional project ID (used when creating links).
     @discardableResult
     @objc public static func initialize(
@@ -177,7 +179,7 @@ public final class DynamicLinksSDK: NSObject, @unchecked Sendable {
     /// // Call from AppDelegate.didFinishLaunchingWithOptions
     /// DynamicLinksSDK.initialize(
     ///     baseUrl: "https://api.grivn.com",
-    ///     secretKey: "your_secret_key",
+    ///     secretKey: "grivn_pk_your_key",
     ///     projectId: "your_project_id"
     /// ) { result in
     ///     if result.found {
@@ -189,7 +191,7 @@ public final class DynamicLinksSDK: NSObject, @unchecked Sendable {
     ///
     /// - Parameters:
     ///   - baseUrl: Backend API base URL.
-    ///   - secretKey: Secret key.
+    ///   - secretKey: Your publishable key (`grivn_pk_…`), never a secret key.
     ///   - projectId: Optional project ID.
     ///   - onDeferredDeeplink: Optional deferred deeplink callback; if nil,
     ///     the SDK will silently report the install.
