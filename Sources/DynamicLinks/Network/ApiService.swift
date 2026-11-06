@@ -125,21 +125,6 @@ internal struct EventBatchResponse: Decodable {
     let accepted: Int
 }
 
-/// Request payload for confirming an install.
-/// Note: `fingerprint_id` is not sent; the server generates it from IP + User-Agent.
-internal struct ConfirmInstallRequest: Encodable {
-    let user_agent: String
-    let device_model: String?
-    let os_version: String?
-    let app_version: String?
-}
-
-/// Response payload for confirming an install.
-internal struct ConfirmInstallResponse: Decodable {
-    let success: Bool
-    let message: String?
-}
-
 /// Helper wrapper used to decode arbitrary JSON values.
 internal struct AnyCodable: Codable {
     let value: Any
@@ -318,26 +303,6 @@ internal final class ApiService: Sendable {
         return try await post(url: url, body: request)
     }
 
-    /// Confirms an install.
-    /// The server performs fingerprint matching based on IP + User-Agent.
-    func confirmInstall(
-        userAgent: String,
-        deviceModel: String?,
-        osVersion: String?,
-        appVersion: String?
-    ) async throws -> ConfirmInstallResponse {
-        let url = URL(string: "\(baseUrl)/api/v1/analytics/confirm-install")!
-        
-        let body = ConfirmInstallRequest(
-            user_agent: userAgent,
-            device_model: deviceModel,
-            os_version: osVersion,
-            app_version: appVersion
-        )
-        
-        return try await post(url: url, body: body)
-    }
-    
     /// Issues a POST request and decodes the response.
     private func post<T: Encodable, R: Decodable>(url: URL, body: T) async throws -> R {
         var request = URLRequest(url: url)

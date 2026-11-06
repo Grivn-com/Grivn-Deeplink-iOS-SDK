@@ -128,7 +128,7 @@ public final class DynamicLinksSDK: NSObject, @unchecked Sendable {
         return self
     }
 
-    /// Whether analytics data collection is enabled (deferred deeplink & install confirmation).
+    /// Whether analytics data collection is enabled (deferred deeplink & event tracking).
     /// When disabled, regular deep link handling (Universal Links) continues to work normally.
     @objc public static var analyticsEnabled: Bool {
         get { lock.withLock { _analyticsEnabled } }
@@ -136,7 +136,7 @@ public final class DynamicLinksSDK: NSObject, @unchecked Sendable {
     }
 
     /// Enable or disable analytics data collection (Swift-only fluent API).
-    /// When disabled, `checkDeferredDeeplink` returns not-found and `confirmInstall` is a no-op.
+    /// When disabled, `checkDeferredDeeplink` returns not-found without asking the backend.
     /// Regular deep link handling (Universal Links) is not affected.
     /// Objective-C: use the `analyticsEnabled` property setter instead.
     @discardableResult
@@ -611,7 +611,8 @@ extension DynamicLinksSDK {
             if response.found {
                 SDKLogger.info("Deferred deeplink matched on network and device signals")
                 trackEvent(name: "deferred_deeplink_match", params: ["match_tier": "fingerprint"])
-                try? await confirmInstallInternal()
+                // The backend has recorded the install on the click it matched (GRIVN-258).
+                trackEvent(name: "app_install")
             } else {
                 SDKLogger.info("No deferred deeplink found")
             }
@@ -653,34 +654,11 @@ extension DynamicLinksSDK {
         }
     }
 
-    /// Manually confirms an install (normally called by `checkDeferredDeeplink`).
+    /// Does nothing. When `checkDeferredDeeplink` finds the link, the backend
+    /// records the install on the click it matched, so there is nothing left
+    /// to confirm (GRIVN-258).
+    @available(*, deprecated, message: "Installs are recorded when checkDeferredDeeplink finds the link; this does nothing.")
     public func confirmInstall() async throws {
-        try ensureInitialized()
-        try await confirmInstallInternal()
-    }
-
-    private func confirmInstallInternal() async throws {
-        // Analytics opt-out: skip install confirmation
-        if !DynamicLinksSDK.analyticsEnabled { return }
-
-        guard let apiService = apiService else { return }
-
-        // UIDevice properties are @MainActor in Swift 6
-        let userAgent = await DeferredLinkContext.getUserAgent()
-        let deviceModel = await MainActor.run { UIDevice.current.model }
-        let osVersion = await MainActor.run { UIDevice.current.systemVersion }
-        let appVersion = await MainActor.run { Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String }
-
-        SDKLogger.debug("confirmInstall — device=\(deviceModel), os=\(osVersion), appVersion=\(appVersion ?? "N/A")")
-
-        _ = try await apiService.confirmInstall(
-            userAgent: userAgent,
-            deviceModel: deviceModel,
-            osVersion: osVersion,
-            appVersion: appVersion
-        )
-        trackEvent(name: "app_install")
-        SDKLogger.info("Install confirmed")
     }
 
     /// Resets the first-launch state (for testing).
